@@ -1,3 +1,17 @@
+## Prerequisites
+
+Before running the project locally, make sure the following software is installed:
+
+- **Node.js** - v24.21.0
+  - https://nodejs.org/en/download
+  - Includes npm
+
+- **Visual Studio Code**
+  - https://code.visualstudio.com/
+
+- **Git**
+  - https://git-scm.com/downloads
+
 # Roya Events & Adventures
 
 Roya Events & Adventures is a full-stack web application for discovering events, booking adventures, requesting custom experiences, and managing website content.
