@@ -7,13 +7,13 @@ export default async function BookAdventurePage({
 
   return (
     <section className="mx-auto max-w-4xl px-6 py-16 sm:px-10">
-      <p className="text-sm uppercase tracking-[0.2em] text-amber-700">
+      <p className="text-sm uppercase tracking-[0.2em] text-roya-sun-deep">
         Adventure request
       </p>
-      <h1 className="mt-4 text-4xl font-semibold tracking-tight text-slate-950">
+      <h1 className="mt-4 text-4xl font-display font-bold uppercase tracking-tight text-roya-ink">
         Plan {slug.replaceAll("-", " ")}
       </h1>
-      <p className="mt-5 max-w-xl leading-7 text-slate-600">
+      <p className="mt-5 max-w-xl leading-7 text-roya-slate">
         Tell us about your preferred date, group, and requirements.
       </p>
       <InquiryForm

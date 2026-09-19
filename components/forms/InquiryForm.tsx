@@ -27,33 +27,33 @@ export function InquiryForm({ kind, submitLabel }: InquiryFormProps) {
       }}
     >
       <input name="kind" type="hidden" value={kind} />
-      <label className="grid gap-2 text-sm font-medium text-slate-700">
+      <label className="grid gap-2 text-sm font-medium text-roya-slate">
         Name
         <input
-          className="border border-slate-300 px-4 py-3"
+          className="border border-roya-slate/40 bg-white px-4 py-3 focus:border-roya-sun focus:outline-none focus:ring-2 focus:ring-roya-sun/50"
           name="name"
           required
         />
       </label>
-      <label className="grid gap-2 text-sm font-medium text-slate-700">
+      <label className="grid gap-2 text-sm font-medium text-roya-slate">
         Email
         <input
-          className="border border-slate-300 px-4 py-3"
+          className="border border-roya-slate/40 bg-white px-4 py-3 focus:border-roya-sun focus:outline-none focus:ring-2 focus:ring-roya-sun/50"
           name="email"
           required
           type="email"
         />
       </label>
-      <label className="grid gap-2 text-sm font-medium text-slate-700">
+      <label className="grid gap-2 text-sm font-medium text-roya-slate">
         Tell us what you are planning
         <textarea
-          className="min-h-36 border border-slate-300 px-4 py-3"
+          className="min-h-36 border border-roya-slate/40 bg-white px-4 py-3 focus:border-roya-sun focus:outline-none focus:ring-2 focus:ring-roya-sun/50"
           name="message"
           required
         />
       </label>
       <button
-        className="w-fit rounded-full bg-slate-950 px-6 py-3 font-medium text-white hover:bg-slate-800"
+        className="w-fit rounded-full bg-roya-sun px-6 py-3 font-semibold text-roya-ink hover:bg-roya-ink hover:text-white"
         type="submit"
       >
         {submitLabel}
