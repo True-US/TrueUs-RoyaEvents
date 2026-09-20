@@ -13,6 +13,9 @@ datasource db {
 
 model Profile {
   id     Int @id @default(autoincrement()) @map("profile_id")
+  
+   // Supabase Auth user ID (auth.users.id)
+  authUserId String @unique @map("auth_user_id") @db.Uuid
   roleId Int @map("role_id")
 
   firstName String  @map("first_name") @db.VarChar(100)
