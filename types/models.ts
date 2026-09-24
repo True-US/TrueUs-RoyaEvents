@@ -1,6 +1,6 @@
 import type { Location } from "@/generated/prisma/client";
 
-/************
+/***********
  * 
  * This file defines the types and validation logic 
  * for handling the entities in the application.
