@@ -1,5 +1,5 @@
 // REVIEW:
-// OUT OF DATE...? 
+// OUT OF DATE...?
 
 export type Json =
   | string
@@ -12,38 +12,43 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      events: {
+      event_adventure: {
         Row: {
-          id: string;
+          event_adventure_id: number;
+          location_id: number | null;
           title: string;
           slug: string;
-          summary: string | null;
-          starts_at: string;
-          location: string | null;
-          status: "draft" | "published" | "archived";
-        };
-        Insert: Omit<Database["public"]["Tables"]["events"]["Row"], "id"> & {
-          id?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["events"]["Insert"]>;
-        Relationships: [];
-      };
-      adventures: {
-        Row: {
-          id: string;
-          title: string;
-          slug: string;
-          summary: string | null;
-          duration: string | null;
-          status: "draft" | "published" | "archived";
+          short_description: string | null;
+          description: string | null;
+          price: number | string | null;
+          start_datetime: string;
+          end_datetime: string | null;
+          status:
+            | "DRAFT"
+            | "PUBLISHED"
+            | "UNPUBLISHED"
+            | "OUT_OF_STOCK"
+            | "CANCELLED"
+            | "OVERDUE"
+            | "COMPLETED";
+          capacity: number | null;
+          available_spots: number | null;
+          event_type: string;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+          created_by: string | null;
+          updated_by: string | null;
         };
         Insert: Omit<
-          Database["public"]["Tables"]["adventures"]["Row"],
-          "id"
+          Database["public"]["Tables"]["event_adventure"]["Row"],
+          "event_adventure_id"
         > & {
-          id?: string;
+          event_adventure_id?: number;
         };
-        Update: Partial<Database["public"]["Tables"]["adventures"]["Insert"]>;
+        Update: Partial<
+          Database["public"]["Tables"]["event_adventure"]["Insert"]
+        >;
         Relationships: [];
       };
       inquiries: {

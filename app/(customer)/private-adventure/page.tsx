@@ -1,4 +1,4 @@
-import { InquiryForm } from "@/components/forms/InquiryForm";
+import { CustomEventForm } from "@/features/events/components/custom-form";
 import { PageIntro } from "@/components/ui/PageIntro";
 
 export default function PrivateAdventurePage() {
@@ -9,7 +9,7 @@ export default function PrivateAdventurePage() {
         title="A route made for your group."
         description="Tell us who is coming, when you would like to go, and what would make the day feel right."
       />
-      <InquiryForm
+      <CustomEventForm
         kind="private_adventure"
         submitLabel="Send private adventure request"
       />
