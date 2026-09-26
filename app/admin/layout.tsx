@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 const adminLinks = [
@@ -11,14 +12,24 @@ const adminLinks = [
 
 export default function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
-    <div className="min-h-full bg-slate-100">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-          <Link className="font-semibold text-slate-950" href="/admin">
-            Roya Admin
+    <div className="flex-1 bg-roya-sand">
+      <header className="border-b-4 border-roya-sun bg-roya-slate">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-2">
+          <Link className="flex items-center gap-4" href="/admin">
+            <Image
+              alt="Roya Event & Adventure"
+              className="h-14 w-auto"
+              height={172}
+              loading="eager"
+              src="/logo-mark.png"
+              width={260}
+            />
+            <span className="font-display text-xl font-semibold uppercase tracking-wider text-white">
+              Admin
+            </span>
           </Link>
           <Link
-            className="text-sm text-slate-600 hover:text-slate-950"
+            className="font-display text-lg font-semibold uppercase tracking-wider text-white/80 hover:text-roya-sun"
             href="/"
           >
             View website
@@ -30,7 +41,7 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
           <nav aria-label="Admin navigation" className="grid gap-1">
             {adminLinks.map((link) => (
               <Link
-                className="px-3 py-2 text-sm text-slate-600 hover:bg-white hover:text-slate-950"
+                className="border-l-4 border-transparent px-3 py-2 text-sm font-medium text-roya-slate hover:border-roya-sun hover:bg-white hover:text-roya-ink"
                 href={link.href}
                 key={link.href}
               >

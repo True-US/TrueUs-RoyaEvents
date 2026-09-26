@@ -13,15 +13,15 @@ export default async function EventDetailsPage({
 
   return (
     <section className="mx-auto max-w-4xl px-6 py-16 sm:px-10">
-      <p className="text-sm uppercase tracking-[0.2em] text-amber-700">
+      <p className="text-sm uppercase tracking-[0.2em] text-roya-sun-deep">
         Event details
       </p>
-      <h1 className="mt-4 text-5xl font-semibold tracking-tight text-slate-950">
+      <h1 className="mt-4 text-5xl font-display font-bold uppercase tracking-tight text-roya-ink">
         {event.title}
       </h1>
-      <p className="mt-6 text-lg leading-8 text-slate-600">{event.summary}</p>
+      <p className="mt-6 text-lg leading-8 text-roya-slate">{event.summary}</p>
       <Link
-        className="mt-8 inline-block rounded-full bg-slate-950 px-6 py-3 font-medium text-white"
+        className="mt-8 inline-block rounded-full bg-roya-sun px-6 py-3 font-semibold text-roya-ink hover:bg-roya-ink hover:text-white"
         href={`/events/${event.slug}/checkout`}
       >
         View ticket options

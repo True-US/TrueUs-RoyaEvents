@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-const pathways = [
+const pathways: { title: string; description: string; href: string }[] = [
   {
     title: "Public events",
     description:
@@ -17,49 +17,55 @@ const pathways = [
 
 export default function HomePage() {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-20 sm:px-10 lg:py-28">
-      <div className="max-w-3xl">
-        <p className="mb-5 text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">
-          Roya Events & Adventures
-        </p>
-        <h1 className="text-5xl font-semibold tracking-tight text-slate-950 sm:text-7xl">
-          Make room for the experience.
-        </h1>
-        <p className="mt-7 max-w-2xl text-lg leading-8 text-slate-600">
-          Discover public events and guided adventures, or work with our team to
-          create something personal.
-        </p>
-        <div className="mt-9 flex flex-wrap gap-4">
-          <Link
-            className="rounded-full bg-slate-950 px-6 py-3 font-medium text-white hover:bg-slate-800"
-            href="/events"
-          >
-            Explore events
-          </Link>
-          <Link
-            className="rounded-full border border-slate-300 px-6 py-3 font-medium text-slate-800 hover:border-slate-950"
-            href="/custom-event"
-          >
-            Plan something custom
-          </Link>
-        </div>
-      </div>
-      <div className="mt-24 grid gap-5 md:grid-cols-2">
-        {pathways.map((pathway) => (
-          <Link
-            className="border-t-2 border-amber-500 pt-5"
-            href={pathway.href}
-            key={pathway.href}
-          >
-            <h2 className="text-2xl font-semibold text-slate-950">
-              {pathway.title}
-            </h2>
-            <p className="mt-3 max-w-md leading-7 text-slate-600">
-              {pathway.description}
+    <>
+      <section className="bg-roya-slate">
+        <div className="mx-auto max-w-6xl px-6 py-20 sm:px-10 lg:py-28">
+          <div className="max-w-3xl">
+            <p className="mb-5 font-display text-lg font-semibold uppercase tracking-[0.25em] text-roya-sun">
+              Roya Events &amp; Adventures
             </p>
-          </Link>
-        ))}
-      </div>
-    </section>
+            <h1 className="font-display text-6xl font-bold uppercase leading-[0.95] tracking-tight text-white sm:text-8xl">
+              Make room for the <span className="text-roya-sun">experience.</span>
+            </h1>
+            <p className="mt-7 max-w-2xl text-lg leading-8 text-white/80">
+              Discover public events and guided adventures, or work with our
+              team to create something personal.
+            </p>
+            <div className="mt-9 flex flex-wrap gap-4">
+              <Link
+                className="rounded-full bg-roya-sun px-6 py-3 font-semibold text-roya-ink hover:bg-white"
+                href="/events"
+              >
+                Explore events
+              </Link>
+              <Link
+                className="rounded-full border border-white/60 px-6 py-3 font-semibold text-white hover:border-roya-sun hover:text-roya-sun"
+                href="/custom-event"
+              >
+                Plan something custom
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section className="mx-auto max-w-6xl px-6 py-16 sm:px-10 lg:py-20">
+        <div className="grid gap-5 md:grid-cols-2">
+          {pathways.map((pathway) => (
+            <Link
+              className="border-t-4 border-roya-sun bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+              href={pathway.href}
+              key={pathway.href}
+            >
+              <h2 className="font-display text-3xl font-bold uppercase text-roya-ink">
+                {pathway.title}
+              </h2>
+              <p className="mt-3 max-w-md leading-7 text-roya-slate">
+                {pathway.description}
+              </p>
+            </Link>
+          ))}
+        </div>
+      </section>
+    </>
   );
 }
