@@ -7,13 +7,13 @@ type PageIntroProps = {
 export function PageIntro({ eyebrow, title, description }: PageIntroProps) {
   return (
     <div className="max-w-2xl">
-      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">
+      <p className="font-display text-base font-semibold uppercase tracking-[0.25em] text-roya-sun-deep">
         {eyebrow}
       </p>
-      <h1 className="mt-4 text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
+      <h1 className="mt-4 font-display text-5xl font-bold uppercase leading-none tracking-tight text-roya-ink sm:text-6xl">
         {title}
       </h1>
-      <p className="mt-5 text-lg leading-8 text-slate-600">{description}</p>
+      <p className="mt-5 text-lg leading-8 text-roya-slate">{description}</p>
     </div>
   );
 }
