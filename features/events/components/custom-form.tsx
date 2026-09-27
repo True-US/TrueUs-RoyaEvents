@@ -3,6 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createEventRequest } from "@/features/events/api";
+import {
+  customEventStep1Schema,
+  customEventStep2Schema,
+  customEventStep3Schema,
+} from "@/features/events/schemas";
 import type { CreateEventWithLocationInput } from "@/features/events/types";
 type CustomEventFormProps = {
   kind: string;
@@ -30,6 +35,7 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState(initialFormData);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Minimum date/time = current local date/time
   const now = new Date();
@@ -44,20 +50,51 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
   const updateField = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
+    const { name, value } = e.target;
+
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
+    });
+
+    setErrors((currentErrors) => {
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[name];
+      return nextErrors;
     });
   };
 
+  const validateStep = (stepNumber: number) => {
+    const schema =
+      stepNumber === 1
+        ? customEventStep1Schema
+        : stepNumber === 2
+          ? customEventStep2Schema
+          : customEventStep3Schema;
+
+    const result = schema.safeParse(formData);
+
+    if (!result.success) {
+      const nextErrors: Record<string, string> = {};
+
+      result.error.issues.forEach((issue) => {
+        const fieldName = issue.path[0]?.toString();
+
+        if (fieldName) {
+          nextErrors[fieldName] = issue.message;
+        }
+      });
+
+      setErrors(nextErrors);
+      return false;
+    }
+
+    setErrors({});
+    return true;
+  };
+
   const goToStep2 = () => {
-    if (
-      !formData.firstName.trim() ||
-      !formData.lastName.trim() ||
-      !formData.email.trim() ||
-      !formData.phone.trim()
-    ) {
-      alert("Please fill in all contact information before continuing.");
+    if (!validateStep(1)) {
       return;
     }
 
@@ -65,35 +102,15 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
   };
 
   const goToStep3 = () => {
-    if (
-      !formData.title.trim() ||
-      !formData.startDate.trim() ||
-      !formData.endDate.trim() ||
-      !formData.numberOfGuests.trim()
-    ) {
-      alert("Please complete all event details before continuing.");
+    if (!validateStep(2)) {
       return;
-    }
-    if (formData.startDate && formData.endDate) {
-      if (new Date(formData.endDate) < new Date(formData.startDate)) {
-        alert("End date and time cannot be earlier than start date and time.");
-        return;
-      }
     }
 
     setStep(3);
   };
 
   const goToStep4 = () => {
-    if (
-      !formData.location.trim() ||
-      !formData.address.trim() ||
-      !formData.city.trim() ||
-      !formData.province.trim() ||
-      !formData.postalCode.trim() ||
-      !formData.country.trim()
-    ) {
-      alert("Please complete all location details before continuing.");
+    if (!validateStep(3)) {
       return;
     }
 
@@ -106,6 +123,26 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
     if (isSubmitting) {
       return;
     }
+
+    const isValid =
+      customEventStep1Schema.safeParse(formData).success &&
+      customEventStep2Schema.safeParse(formData).success &&
+      customEventStep3Schema.safeParse(formData).success;
+
+    if (!isValid) {
+      const combined = {
+        ...customEventStep1Schema.safeParse(formData).error?.flatten()
+          .fieldErrors,
+        ...customEventStep2Schema.safeParse(formData).error?.flatten()
+          .fieldErrors,
+        ...customEventStep3Schema.safeParse(formData).error?.flatten()
+          .fieldErrors,
+      };
+
+      setErrors(combined as Record<string, string>);
+      return;
+    }
+
     setIsSubmitting(true);
     let status = "";
     if (
@@ -268,8 +305,18 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                   onChange={updateField}
                   placeholder="John"
                   required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                  aria-invalid={Boolean(errors.firstName)}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                    errors.firstName
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-slate-300 focus:border-slate-900"
+                  }`}
                 />
+                {errors.firstName && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.firstName}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -283,8 +330,16 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                   onChange={updateField}
                   placeholder="Smith"
                   required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                  aria-invalid={Boolean(errors.lastName)}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                    errors.lastName
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-slate-300 focus:border-slate-900"
+                  }`}
                 />
+                {errors.lastName && (
+                  <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>
+                )}
               </div>
             </div>
 
@@ -300,8 +355,16 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                 onChange={updateField}
                 placeholder="john@example.com"
                 required
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                aria-invalid={Boolean(errors.email)}
+                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                  errors.email
+                    ? "border-red-500 focus:border-red-500"
+                    : "border-slate-300 focus:border-slate-900"
+                }`}
               />
+              {errors.email && (
+                <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+              )}
             </div>
 
             <div>
@@ -316,8 +379,16 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                 onChange={updateField}
                 placeholder="(780) 555-0123"
                 required
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                aria-invalid={Boolean(errors.phone)}
+                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                  errors.phone
+                    ? "border-red-500 focus:border-red-500"
+                    : "border-slate-300 focus:border-slate-900"
+                }`}
               />
+              {errors.phone && (
+                <p className="mt-1 text-sm text-red-600">{errors.phone}</p>
+              )}
             </div>
 
             <div className="flex justify-end pt-4">
@@ -357,8 +428,16 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                 onChange={updateField}
                 placeholder="John's Birthday Party"
                 required
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                aria-invalid={Boolean(errors.title)}
+                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                  errors.title
+                    ? "border-red-500 focus:border-red-500"
+                    : "border-slate-300 focus:border-slate-900"
+                }`}
               />
+              {errors.title && (
+                <p className="mt-1 text-sm text-red-600">{errors.title}</p>
+              )}
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
@@ -374,8 +453,18 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                   onChange={updateField}
                   min={minDateTime}
                   required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                  aria-invalid={Boolean(errors.startDate)}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                    errors.startDate
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-slate-300 focus:border-slate-900"
+                  }`}
                 />
+                {errors.startDate && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.startDate}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -390,8 +479,16 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                   onChange={updateField}
                   min={formData.startDate || minDateTime}
                   required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                  aria-invalid={Boolean(errors.endDate)}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                    errors.endDate
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-slate-300 focus:border-slate-900"
+                  }`}
                 />
+                {errors.endDate && (
+                  <p className="mt-1 text-sm text-red-600">{errors.endDate}</p>
+                )}
               </div>
             </div>
 
@@ -408,8 +505,18 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                 placeholder="20"
                 min="1"
                 required
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                aria-invalid={Boolean(errors.numberOfGuests)}
+                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                  errors.numberOfGuests
+                    ? "border-red-500 focus:border-red-500"
+                    : "border-slate-300 focus:border-slate-900"
+                }`}
               />
+              {errors.numberOfGuests && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.numberOfGuests}
+                </p>
+              )}
             </div>
 
             <div className="flex items-center justify-between pt-4">
@@ -456,8 +563,16 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                 onChange={updateField}
                 placeholder="Roya Event & Adventure Center"
                 required
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                aria-invalid={Boolean(errors.location)}
+                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                  errors.location
+                    ? "border-red-500 focus:border-red-500"
+                    : "border-slate-300 focus:border-slate-900"
+                }`}
               />
+              {errors.location && (
+                <p className="mt-1 text-sm text-red-600">{errors.location}</p>
+              )}
             </div>
 
             <div>
@@ -470,8 +585,16 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                 onChange={updateField}
                 placeholder="123 Main St 12Ave"
                 required
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                aria-invalid={Boolean(errors.address)}
+                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                  errors.address
+                    ? "border-red-500 focus:border-red-500"
+                    : "border-slate-300 focus:border-slate-900"
+                }`}
               />
+              {errors.address && (
+                <p className="mt-1 text-sm text-red-600">{errors.address}</p>
+              )}
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
@@ -485,8 +608,16 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                   onChange={updateField}
                   placeholder="Edmonton"
                   required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                  aria-invalid={Boolean(errors.city)}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                    errors.city
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-slate-300 focus:border-slate-900"
+                  }`}
                 />
+                {errors.city && (
+                  <p className="mt-1 text-sm text-red-600">{errors.city}</p>
+                )}
               </div>
 
               <div>
@@ -499,8 +630,16 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                   onChange={updateField}
                   placeholder="Alberta"
                   required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                  aria-invalid={Boolean(errors.province)}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                    errors.province
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-slate-300 focus:border-slate-900"
+                  }`}
                 />
+                {errors.province && (
+                  <p className="mt-1 text-sm text-red-600">{errors.province}</p>
+                )}
               </div>
             </div>
 
@@ -515,8 +654,18 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                   onChange={updateField}
                   placeholder="T6G 2T6"
                   required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                  aria-invalid={Boolean(errors.postalCode)}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                    errors.postalCode
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-slate-300 focus:border-slate-900"
+                  }`}
                 />
+                {errors.postalCode && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.postalCode}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -529,8 +678,16 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                   onChange={updateField}
                   placeholder="Canada"
                   required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                  aria-invalid={Boolean(errors.country)}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
+                    errors.country
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-slate-300 focus:border-slate-900"
+                  }`}
                 />
+                {errors.country && (
+                  <p className="mt-1 text-sm text-red-600">{errors.country}</p>
+                )}
               </div>
             </div>
 
