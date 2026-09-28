@@ -1,4 +1,4 @@
-import { InquiryForm } from "@/components/forms/InquiryForm";
+import { CustomEventForm } from "@/features/events/components/custom-form";
 import { PageIntro } from "@/components/ui/PageIntro";
 
 export default function ContactPage() {
@@ -9,7 +9,7 @@ export default function ContactPage() {
         title="Let us start with a conversation."
         description="For general questions, partnerships, or help choosing an experience, send us a note."
       />
-      <InquiryForm kind="contact" submitLabel="Send message" />
+      <CustomEventForm kind="contact" submitLabel="Send message" />
     </section>
   );
 }

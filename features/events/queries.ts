@@ -3,26 +3,25 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function getPublishedEvents(): Promise<Event[]> {
   const db = await createClient();
-  
-  // Get all events with status "published", ordered by start date ascending.
+
   const { data, error } = await db
-    .from("events")
+    .from("event_adventure")
     .select("*")
-    .eq("status", "published") // TODO: Staus should be an enum.
-    .order("starts_at", { ascending: true });
+    .eq("status", "PUBLISHED")
+    .order("start_datetime", { ascending: true });
 
   if (error) {
-    console.error("Error fetching published events:", error);
+    console.error("Error fetching published events:", error.message);
     return [];
   }
 
   return (data ?? []).map((row) => ({
-    id: row.id,
+    id: String(row.event_adventure_id),
     title: row.title,
     slug: row.slug,
-    summary: row.summary ?? "",
-    startsAt: row.starts_at,
-    location: row.location ?? "",
+    summary: row.short_description ?? row.description ?? "",
+    startsAt: row.start_datetime,
+    location: "",
   }));
 }
 

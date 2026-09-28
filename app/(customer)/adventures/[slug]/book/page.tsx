@@ -1,4 +1,4 @@
-import { InquiryForm } from "@/components/forms/InquiryForm";
+import { CustomEventForm } from "@/features/events/components/custom-form";
 
 export default async function BookAdventurePage({
   params,
@@ -16,7 +16,7 @@ export default async function BookAdventurePage({
       <p className="mt-5 max-w-xl leading-7 text-roya-slate">
         Tell us about your preferred date, group, and requirements.
       </p>
-      <InquiryForm
+      <CustomEventForm
         kind="private_adventure"
         submitLabel="Send adventure request"
       />
