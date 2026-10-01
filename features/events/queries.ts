@@ -11,7 +11,7 @@ export async function getPublishedEvents(): Promise<Event[]> {
     .order("start_datetime", { ascending: true });
 
   if (error) {
-    console.error("Error fetching published events:", error.message);
+    //console.error("Error fetching published events:", error.message);
     return [];
   }
 

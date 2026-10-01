@@ -18,7 +18,6 @@ export function Header() {
 
   const [firstName, setFirstName] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const supabase = createClient();
@@ -35,13 +34,10 @@ export function Header() {
         setIsLoggedIn(false);
         setFirstName(null);
       }
-
-      setLoading(false);
     }
 
     loadUser();
 
-    // Automatically update the header when login/logout happens
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -54,8 +50,6 @@ export function Header() {
         setIsLoggedIn(false);
         setFirstName(null);
       }
-
-      setLoading(false);
     });
 
     return () => {
@@ -88,7 +82,7 @@ export function Header() {
             alt="Roya Event & Adventure"
             className="h-16 w-auto"
             height={172}
-            loading="eager"
+            priority
             src="/logo-mark.png"
             width={260}
           />
@@ -106,24 +100,26 @@ export function Header() {
               {link.label}
             </Link>
           ))}
-          {!loading &&
-            (isLoggedIn ? (
-              <>
-                <span className="text-roya-sun">Hi, {firstName ?? "User"}</span>
-
-                <button
-                  className="hover:text-roya-sun"
-                  onClick={handleLogout}
-                  type="button"
-                >
-                  Logout
-                </button>
-              </>
-            ) : (
-              <Link className="hover:text-roya-sun" href="/login">
-                Login
+          {isLoggedIn ? (
+            <>
+              <Link className="hover:text-roya-sun" href="/dashboard">
+                Dashboard
               </Link>
-            ))}
+              <span className="text-roya-sun">Hi, {firstName ?? "User"}</span>
+
+              <button
+                className="hover:text-roya-sun"
+                onClick={handleLogout}
+                type="button"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <Link className="hover:text-roya-sun" href="/login">
+              Login
+            </Link>
+          )}
         </nav>
       </div>
     </header>
