@@ -42,5 +42,7 @@ next-env.d.ts
 
 # prisma
 generated/
+supabase/snippets/
+
 #launch.json
 .vscode/launch.json
