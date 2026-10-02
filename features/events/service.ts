@@ -1,11 +1,86 @@
-import { prisma as supabasePrisma } from "@/lib/supabase/prisma";
-import type { CreateEventWithLocationInput } from "@/features/events/types";
+//import { prisma as supabasePrisma } from "@/lib/supabase/prisma";
+import { prisma } from "@/lib/supabase/prisma";
+import type {
+  CreateEventWithLocationInput,
+  UpdateEventWithLocationInput,
+} from "@/features/events/types";
 
+// export async function createEventWithLocation(
+//   payload: CreateEventWithLocationInput,
+// ) {
+//   return supabasePrisma.$transaction(async (tx) => {
+//     // create location first
+//     const createdLocation = await tx.location.create({
+//       data: {
+//         name: payload.location.name,
+//         address: payload.location.address ?? null,
+//         city: payload.location.city,
+//         province: payload.location.province,
+//         postalCode: payload.location.postalCode ?? null,
+//         country: payload.location.country,
+//         isActive: true,
+//       },
+//     });
+
+//     // then create eventadventure
+//     try {
+//       const createdEvent = await tx.eventAdventure.create({
+//         data: {
+//           locationId: createdLocation.id,
+
+//           title: payload.event.title,
+//           slug: payload.event.slug,
+
+//           shortDescription: payload.event.shortDescription ?? null,
+
+//           description: payload.event.description ?? null,
+
+//           startDatetime: new Date(payload.event.startDatetime),
+
+//           endDatetime: payload.event.endDatetime
+//             ? new Date(payload.event.endDatetime)
+//             : null,
+
+//           capacity: payload.event.capacity ?? null,
+
+//           availableSpots:
+//             payload.event.availableSpots ?? payload.event.capacity ?? 0,
+
+//           eventType: payload.event.eventType,
+
+//           status: payload.event.status ?? "DRAFT",
+
+//           isActive: payload.event.isActive ?? true,
+
+//           createdBy: payload.event.createdBy ?? null,
+
+//           updatedBy: payload.event.updatedBy ?? null,
+//         },
+//       });
+
+//       return {
+//         createdLocation,
+//         createdEvent,
+//         success: true,
+//       };
+//     } catch (error) {
+//       console.error("EVENT INSERT FAILED:");
+
+//       throw error;
+//     }
+//   });
+// }
+
+/*
+ * CREATE EVENT
+ *
+ * Creates a new Location first, then creates the EventAdventure
+ * using that location.
+ */
 export async function createEventWithLocation(
   payload: CreateEventWithLocationInput,
 ) {
-  return supabasePrisma.$transaction(async (tx) => {
-    // create location first
+  return prisma.$transaction(async (tx) => {
     const createdLocation = await tx.location.create({
       data: {
         name: payload.location.name,
@@ -18,51 +93,223 @@ export async function createEventWithLocation(
       },
     });
 
-    // then create eventadventure
-    try {
-      const createdEvent = await tx.eventAdventure.create({
-        data: {
-          locationId: createdLocation.id,
+    const createdEvent = await tx.eventAdventure.create({
+      data: {
+        locationId: createdLocation.id,
 
-          title: payload.event.title,
-          slug: payload.event.slug,
+        title: payload.event.title,
+        slug: payload.event.slug,
+        shortDescription:
+          payload.event.shortDescription ?? null,
+        description:
+          payload.event.description ?? null,
 
-          shortDescription: payload.event.shortDescription ?? null,
+        price: payload.event.price ?? null,
 
-          description: payload.event.description ?? null,
+        startDatetime: new Date(
+          payload.event.startDatetime,
+        ),
 
-          startDatetime: new Date(payload.event.startDatetime),
+        endDatetime: payload.event.endDatetime
+          ? new Date(payload.event.endDatetime)
+          : null,
 
-          endDatetime: payload.event.endDatetime
-            ? new Date(payload.event.endDatetime)
-            : null,
+        capacity: payload.event.capacity ?? null,
 
-          capacity: payload.event.capacity ?? null,
+        availableSpots:
+          payload.event.availableSpots ??
+          payload.event.capacity ??
+          0,
 
-          availableSpots:
-            payload.event.availableSpots ?? payload.event.capacity ?? 0,
+        /*
+         * This service is specifically for Events.
+         */
+        eventType: "event",
 
-          eventType: payload.event.eventType,
+        status: payload.event.status ?? "DRAFT",
 
-          status: payload.event.status ?? "DRAFT",
+        isActive: payload.event.isActive ?? true,
+      },
+    });
 
-          isActive: payload.event.isActive ?? true,
+    return {
+      success: true,
+      createdLocation,
+      createdEvent,
+    };
+  });
+}
 
-          createdBy: payload.event.createdBy ?? null,
+/*
+ * UPDATE EVENT
+ *
+ * Updates the existing Location and existing EventAdventure.
+ *
+ * It does NOT create a new location.
+ * It does NOT delete the location.
+ */
+export async function updateEventWithLocation(
+  payload: UpdateEventWithLocationInput,
+) {
+  return prisma.$transaction(async (tx) => {
+    const updatedLocation = await tx.location.update({
+      where: {
+        id: payload.location.id,
+      },
+      data: {
+        name: payload.location.name,
+        address: payload.location.address ?? null,
+        city: payload.location.city,
+        province: payload.location.province,
+        postalCode: payload.location.postalCode ?? null,
+        country: payload.location.country,
+      },
+    });
 
-          updatedBy: payload.event.updatedBy ?? null,
-        },
-      });
+    const updatedEvent = await tx.eventAdventure.update({
+      where: {
+        id: payload.id,
+      },
+      data: {
+        title: payload.event.title,
+        slug: payload.event.slug,
+
+        shortDescription:
+          payload.event.shortDescription ?? null,
+
+        description:
+          payload.event.description ?? null,
+
+        price: payload.event.price ?? null,
+
+        startDatetime: new Date(
+          payload.event.startDatetime,
+        ),
+
+        endDatetime: payload.event.endDatetime
+          ? new Date(payload.event.endDatetime)
+          : null,
+
+        capacity: payload.event.capacity ?? null,
+
+        availableSpots:
+          payload.event.availableSpots ??
+          payload.event.capacity ??
+          0,
+
+        /*
+         * Keep this as an Event.
+         */
+        eventType: "event",
+
+        status: payload.event.status ?? "DRAFT",
+
+        isActive: payload.event.isActive ?? true,
+      },
+    });
+
+    return {
+      success: true,
+      updatedLocation,
+      updatedEvent,
+    };
+  });
+}
+
+/*
+ * DELETE / DEACTIVATE EVENT
+ *
+ * If there are no bookings:
+ *   physically delete the EventAdventure.
+ *
+ * If bookings exist:
+ *   deactivate the event instead so booking history remains.
+ *
+ * IMPORTANT:
+ * The Location is NEVER deleted.
+ */
+export async function deleteOrDeactivateEvent(
+  eventId: number,
+) {
+  return prisma.$transaction(async (tx) => {
+    const event = await tx.eventAdventure.findUnique({
+      where: {
+        id: eventId,
+      },
+      include: {
+        bookings: true,
+      },
+    });
+
+    if (!event) {
+      throw new Error("Event not found.");
+    }
+
+    /*
+     * Event has bookings.
+     * Keep it in the database and deactivate it.
+     */
+    if (event.bookings.length > 0) {
+      const updatedEvent =
+        await tx.eventAdventure.update({
+          where: {
+            id: eventId,
+          },
+          data: {
+            isActive: false,
+            status: "UNPUBLISHED",
+          },
+        });
 
       return {
-        createdLocation,
-        createdEvent,
         success: true,
+        action: "deactivated" as const,
+        event: updatedEvent,
       };
-    } catch (error) {
-      console.error("EVENT INSERT FAILED:");
-
-      throw error;
     }
+
+    /*
+     * No bookings.
+     * Delete only the EventAdventure.
+     *
+     * We intentionally do NOT delete Location.
+     */
+    await tx.eventAdventure.delete({
+      where: {
+        id: eventId,
+      },
+    });
+
+    return {
+      success: true,
+      action: "deleted" as const,
+    };
   });
+}
+
+/*
+ * REACTIVATE EVENT
+ */
+export async function reactivateEvent(
+  eventId: number,
+) {
+  const event = await prisma.eventAdventure.update({
+    where: {
+      id: eventId,
+    },
+    data: {
+      isActive: true,
+
+      /*
+       * We use DRAFT after reactivation.
+       * Admin can then publish it when appropriate.
+       */
+      status: "DRAFT",
+    },
+  });
+
+  return {
+    success: true,
+    event,
+  };
 }
