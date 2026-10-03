@@ -2,7 +2,7 @@ import type { AdminEvent,Event } from "@/features/events/types";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/supabase/prisma";
 
-/*
+/**
  * CUSTOMER QUERY
  *
  * This remains the existing customer-side query.
@@ -19,7 +19,6 @@ export async function getPublishedEvents(): Promise<Event[]> {
     .order("start_datetime", { ascending: true });
 
   if (error) {
-    //console.error("Error fetching published events:", error.message);
     return [];
   }
 
@@ -38,9 +37,7 @@ export async function getEventBySlug(slug: string): Promise<Event | null> {
   return null;
 }
 
-
-
-/*
+/**
  * ADMIN QUERY
  *
  * Admin needs to see ALL events, including inactive events.

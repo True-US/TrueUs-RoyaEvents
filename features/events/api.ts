@@ -5,33 +5,6 @@ import type {
 
 import type { AdminEvent } from "./types";
 
-// export async function createEventRequest(
-//   payload: CreateEventWithLocationInput,
-// ) {
-//   const res = await fetch("/api/events", {
-//     method: "POST",
-//     headers: {
-//       "Content-Type": "application/json",
-//     },
-//     body: JSON.stringify(payload),
-//   });
-
-//   const text = await res.text();
-//   let data;
-//   try {
-//     data = text ? JSON.parse(text) : null;
-//   } catch {
-//     //console.error("Non-JSON response:", text);
-//     throw new Error(`API error: ${res.status} ${res.statusText}`);
-//   }
-
-//   if (!res.ok) {
-//     throw new Error(data?.message || "Failed to create event");
-//   }
-
-//   return data;
-// }
-
 async function parseResponse<T>(res: Response): Promise<T> {
   const text = await res.text();
 
@@ -73,28 +46,12 @@ export async function getAdminEventsRequest(): Promise<{
   }>(res);
 }
 
-
 type CreateEventResponse = {
   success: boolean;
   createdLocation?: unknown;
   createdEvent?: unknown;
   message?: string;
 };
-
-
-// export async function createEventRequest(
-//   payload: CreateEventWithLocationInput,
-// ){
-//   const res = await fetch("/api/events", {
-//     method: "POST",
-//     headers: {
-//       "Content-Type": "application/json",
-//     },
-//     body: JSON.stringify(payload),
-//   });
-
-//   return parseResponse(res);
-// }
 
 export async function createEventRequest(
   payload: CreateEventWithLocationInput,
@@ -110,7 +67,6 @@ export async function createEventRequest(
   return parseResponse<CreateEventResponse>(res);
 }
 
-
 export async function updateEventRequest(
   payload: UpdateEventWithLocationInput,
 ) {
@@ -125,13 +81,11 @@ export async function updateEventRequest(
   return parseResponse(res);
 }
 
-
 type DeleteEventResponse = {
   success: boolean;
   action: "deleted" | "deactivated";
   event?: unknown;
 };
-
 
 export async function deleteEventRequest(
   eventId: number,
@@ -142,8 +96,6 @@ export async function deleteEventRequest(
 
   return parseResponse<DeleteEventResponse>(res);
 }
-
-
 
 export async function reactivateEventRequest(
   eventId: number,
