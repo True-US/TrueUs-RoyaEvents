@@ -1,14 +1,17 @@
+// Fails the build if a Client Component imports this file.
+import "server-only";
+
 import { cache } from "react";
 
 import type { Prisma } from "@/generated/prisma/client";
-import { getCoverUrl } from "@/features/events/cover";
+import { getCoverUrl } from "@/features/events/utils/cover";
 import {
   eventListOrderBy,
   eventListWhere,
   publicEventDetailWhere,
   visibleEventsWhere,
-} from "@/features/events/filters";
-import type { EventListParams } from "@/features/events/search-params";
+} from "@/features/events/server/query-builders";
+import type { EventListParams } from "@/features/events/utils/search-params";
 import type { EventDetail, EventListItem } from "@/features/events/types";
 import { prisma } from "@/lib/supabase/prisma";
 

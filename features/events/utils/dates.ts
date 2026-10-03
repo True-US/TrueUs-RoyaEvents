@@ -1,9 +1,8 @@
+import { EVENT_TIME_ZONE } from "@/features/events/constants";
 
 // JavaScript Dates are absolute moments with no time zone. These helpers answer
 // "what day is it in Edmonton?" and "when does that Edmonton day start?",
 // using Intl so that daylight-saving rules come from the runtime's tz data.
-
-import { EVENT_TIME_ZONE } from "./constants";
 
 export type ZonedDate = {
   year: number;

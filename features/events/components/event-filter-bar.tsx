@@ -5,7 +5,7 @@ import { EventListControls } from "@/features/events/components/event-list-contr
 import {
   buildEventListHref,
   type EventListParams,
-} from "@/features/events/search-params";
+} from "@/features/events/utils/search-params";
 
 type EventFilterBarProps = {
   params: EventListParams;
@@ -32,11 +32,10 @@ export function EventFilterBar({ params, regions }: EventFilterBarProps) {
               <li key={tab.value}>
                 <Link
                   aria-current={isActive ? "page" : undefined}
-                  className={`inline-block rounded-full px-4 py-2 text-sm font-semibold transition ${
-                    isActive
-                      ? "bg-roya-ink text-white"
-                      : "bg-white text-roya-slate hover:bg-roya-sun hover:text-roya-ink"
-                  }`}
+                  className={`inline-block rounded-full px-4 py-2 text-sm font-semibold transition ${isActive
+                    ? "bg-roya-ink text-white"
+                    : "bg-white text-roya-slate hover:bg-roya-sun hover:text-roya-ink"
+                    }`}
                   // Switch the tab but keep the current region and sort.
                   href={buildEventListHref({ ...params, tab: tab.value })}
                   scroll={false}

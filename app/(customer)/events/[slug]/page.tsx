@@ -10,8 +10,8 @@ import {
   formatVenueLines,
   getEventState,
   type EventState,
-} from "@/features/events/format";
-import { getPublicEventBySlug } from "@/features/events/queries";
+} from "@/features/events/utils/format";
+import { getPublicEventBySlug } from "@/features/events/server/queries";
 import type { EventDetail } from "@/features/events/types";
 
 // Notice shown above the details when tickets can't be bought.

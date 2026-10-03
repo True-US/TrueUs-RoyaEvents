@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createEventWithLocation } from "@/features/events/service";
+import { createEventWithLocation } from "@/features/events/server/service";
 import type { CreateEventWithLocationInput } from "@/features/events/types";
 
 export async function POST(request: Request) {

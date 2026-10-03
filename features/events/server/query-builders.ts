@@ -1,7 +1,10 @@
+// Fails the build if a Client Component imports this file.
+import "server-only";
+
 import type { Prisma } from "@/generated/prisma/client";
 import { EVENT_STATUS, EVENT_TYPE, type EventSort, type EventTab } from "@/features/events/constants";
-import { getZonedDate, startOfZonedDay, type ZonedDate } from "@/features/events/dates";
-import type { EventListParams } from "@/features/events/search-params";
+import { getZonedDate, startOfZonedDay, type ZonedDate } from "@/features/events/utils/dates";
+import type { EventListParams } from "@/features/events/utils/search-params";
 
 // Prisma `where` and `orderBy` objects for the public event list. Typing them
 // with Prisma's generated types makes a misspelled or renamed field a compile

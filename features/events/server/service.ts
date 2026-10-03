@@ -1,3 +1,6 @@
+// Fails the build if a Client Component imports this file.
+import "server-only";
+
 import { prisma as supabasePrisma } from "@/lib/supabase/prisma";
 import type { CreateEventWithLocationInput } from "@/features/events/types";
 

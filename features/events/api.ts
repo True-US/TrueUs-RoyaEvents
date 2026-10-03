@@ -1,4 +1,4 @@
-import type { CreateEventWithLocationInput } from "./types";
+import type { CreateEventWithLocationInput } from "@/features/events/types";
 
 export async function createEventRequest(
   payload: CreateEventWithLocationInput,

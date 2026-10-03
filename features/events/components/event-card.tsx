@@ -6,7 +6,7 @@ import {
   formatPrice,
   getEventBadge,
   type EventBadge,
-} from "@/features/events/format";
+} from "@/features/events/utils/format";
 import type { EventListItem } from "@/features/events/types";
 
 // Badge colours by tone.

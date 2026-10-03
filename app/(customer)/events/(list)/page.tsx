@@ -3,12 +3,12 @@ import Link from "next/link";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { EventCard } from "@/features/events/components/event-card";
 import { EventFilterBar } from "@/features/events/components/event-filter-bar";
-import { getEventRegions, getPublicEventList } from "@/features/events/queries";
+import { getEventRegions, getPublicEventList } from "@/features/events/server/queries";
 import {
   hasActiveFilters,
   parseEventListParams,
   type EventListParams,
-} from "@/features/events/search-params";
+} from "@/features/events/utils/search-params";
 import type { EventListItem } from "@/features/events/types";
 
 /**

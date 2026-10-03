@@ -7,7 +7,7 @@ import { EVENT_SORTS, type EventSort } from "@/features/events/constants";
 import {
   buildEventListHref,
   type EventListParams,
-} from "@/features/events/search-params";
+} from "@/features/events/utils/search-params";
 
 type EventListControlsProps = {
   params: EventListParams;
