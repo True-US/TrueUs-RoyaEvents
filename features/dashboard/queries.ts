@@ -1,6 +1,17 @@
 import "server-only";
 
 import { prisma } from "@/lib/supabase/prisma";
+import { getManagedProfilePage } from "./profile-management";
+import { MANAGED_PROFILE_ROLE_IDS } from "./profile-management-types";
+
+export async function getInitialManagedProfiles() {
+  const [users, admins] = await Promise.all([
+    getManagedProfilePage(MANAGED_PROFILE_ROLE_IDS.user, 1),
+    getManagedProfilePage(MANAGED_PROFILE_ROLE_IDS.admin, 1),
+  ]);
+
+  return { users, admins };
+}
 
 export async function getUserDashboardBookings(profileId: number) {
   const bookings = await prisma.booking.findMany({
