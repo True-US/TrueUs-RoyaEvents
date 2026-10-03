@@ -6,6 +6,7 @@ import { ManagePermissions } from "./manage-permissions";
 import { ManageEvents } from "./manage-events";
 import { ManageSchedule } from "./manage-schedule";
 import { ManageBookings } from "./manage-bookings";
+import type { InitialManagedProfiles } from "../profile-management-types";
 type DashboardTab =
   | "Manage User"
   | "Manage Permissions"
@@ -21,7 +22,13 @@ const dashboardTabs: DashboardTab[] = [
   "Manage Bookings",
 ];
 
-export function AdminDashboard({ firstName }: { firstName: string }) {
+export function AdminDashboard({
+  firstName,
+  managedProfiles,
+}: {
+  firstName: string;
+  managedProfiles: InitialManagedProfiles;
+}) {
   const [activeTab, setActiveTab] = useState<DashboardTab>("Manage User");
 
   return (
@@ -60,17 +67,17 @@ export function AdminDashboard({ firstName }: { firstName: string }) {
       </div>
 
       <div className="mt-6">
-        <h2 className="font-display text-2xl font-bold text-roya-ink">
-          {activeTab === "Manage User" && <ManageUsers />}
+        {activeTab === "Manage User" && (
+          <ManageUsers initialProfiles={managedProfiles} />
+        )}
 
-          {activeTab === "Manage Permissions" && <ManagePermissions />}
+        {activeTab === "Manage Permissions" && <ManagePermissions />}
 
-          {activeTab === "Manage Events" && <ManageEvents />}
+        {activeTab === "Manage Events" && <ManageEvents />}
 
-          {activeTab === "Manage Schedule" && <ManageSchedule />}
+        {activeTab === "Manage Schedule" && <ManageSchedule />}
 
-          {activeTab === "Manage Bookings" && <ManageBookings />}
-        </h2>
+        {activeTab === "Manage Bookings" && <ManageBookings />}
       </div>
     </section>
   );

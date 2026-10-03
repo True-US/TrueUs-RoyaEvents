@@ -5,7 +5,10 @@ import {
   isAdminRole,
 } from "@/features/auth/current-profile";
 import { UserDashboard } from "@/features/dashboard/components/user-dashboard";
-import { getUserDashboardBookings } from "@/features/dashboard/queries";
+import {
+  getInitialManagedProfiles,
+  getUserDashboardBookings,
+} from "@/features/dashboard/queries";
 import { AdminDashboard } from "@/features/dashboard/components/admin-dashboard";
 export default async function DashboardPage() {
   const profile = await getCurrentProfile();
@@ -14,12 +17,18 @@ export default async function DashboardPage() {
   if (!profile) redirect("/login");
   if (!profile.isActive || !profile.role.isActive) redirect("/");
 
-  const { bookings, upcomingBookings } = await getUserDashboardBookings(
-    profile.id,
-  );
   if (isAdminRole(profile.role.name)) {
-    return <AdminDashboard firstName={profile.firstName} />;
+    const managedProfiles = await getInitialManagedProfiles();
+    return (
+      <AdminDashboard
+        firstName={profile.firstName}
+        managedProfiles={managedProfiles}
+      />
+    );
   } else {
+    const { bookings, upcomingBookings } = await getUserDashboardBookings(
+      profile.id,
+    );
     return (
       <UserDashboard
         bookings={bookings}
