@@ -7,7 +7,7 @@ export type Event = {
   location: string;
 };
 
-/*
+/**
  * This type is only for the Admin Manage Events page.
  * It does not replace the customer Event type above.
  */
