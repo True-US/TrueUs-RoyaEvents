@@ -12,8 +12,13 @@ import {
   visibleEventsWhere,
 } from "@/features/events/server/query-builders";
 import type { EventListParams } from "@/features/events/utils/search-params";
-import type { EventDetail, EventListItem } from "@/features/events/types";
+import type { AdminEvent, CreateEventWithLocationInput, EventDetail, EventListItem, UpdateEventWithLocationInput } from "@/features/events/types";
 import { prisma } from "@/lib/supabase/prisma";
+import { getCurrentProfile, isAdminRole } from "@/features/auth/current-profile";
+import { NextResponse } from "next/server";
+
+import { createEventWithLocation, deleteOrDeactivateEvent, reactivateEvent, updateEventWithLocation } from "./service";
+
 
 // Only the columns a card needs. `satisfies` checks the field names against
 // the schema while keeping the exact shape, so the row type below knows
@@ -156,4 +161,330 @@ function toEventDetail({ coverImagePath, price, ...row }: EventDetailRow): Event
     price: price === null ? null : price.toNumber(),
     coverUrl: getCoverUrl(coverImagePath),
   };
+}
+
+/**
+ * Keep it for now.
+ * CUSTOMER QUERY
+ * 
+ * This remains the existing customer-side query.
+ */
+// export async function getPublishedEvents(): Promise<Event[]> {
+//   const db = await createClient();
+
+//   const { data, error } = await db
+//     .from("event_adventure")
+//     .select("*")
+//     .eq("event_type", "event")
+//     .eq("status", "PUBLISHED")
+//     .eq("is_active", true)
+//     .order("start_datetime", { ascending: true });
+
+//   if (error) {
+//     return [];
+//   }
+
+//   return (data ?? []).map((row) => ({
+//     id: String(row.event_adventure_id),
+//     title: row.title,
+//     slug: row.slug,
+//     summary: row.short_description ?? row.description ?? "",
+//     startsAt: row.start_datetime,
+//     location: "",
+//   }));
+// }
+
+export async function getEventBySlug(slug: string): Promise<Event | null> {
+  void slug;
+  return null;
+}
+
+/**
+ * ADMIN QUERY
+ *
+ * Admin needs to see ALL events, including inactive events.
+ * We filter only eventType = "event" so adventures are excluded.
+ */
+export async function getAdminEvents(): Promise<AdminEvent[]> {
+  const events = await prisma.eventAdventure.findMany({
+    where: {
+      eventType: "event",
+    },
+    include: {
+      location: true,
+    },
+    orderBy: {
+      startDatetime: "asc",
+    },
+  });
+
+  return events.map((event) => ({
+    id: String(event.id),
+    title: event.title,
+    slug: event.slug,
+    summary: event.shortDescription ?? event.description ?? "",
+    description: event.description ?? "",
+    price: event.price === null ? null : Number(event.price),
+    startsAt: event.startDatetime.toISOString(),
+    endsAt: event.endDatetime
+      ? event.endDatetime.toISOString()
+      : null,
+    status: event.status,
+    capacity: event.capacity,
+    availableSpots: event.availableSpots,
+    eventType: event.eventType,
+    isActive: event.isActive,
+
+    location: event.location
+      ? {
+          id: event.location.id,
+          name: event.location.name,
+          address: event.location.address ?? "",
+          city: event.location.city,
+          province: event.location.province,
+          postalCode: event.location.postalCode ?? "",
+          country: event.location.country,
+        }
+      : null,
+  }));
+}
+
+
+
+async function requireAdmin() {
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    return null;
+  }
+
+  if (!profile.role) {
+    return null;
+  }
+
+  if (!isAdminRole(profile.role.name)) {
+    return null;
+  }
+
+  return profile;
+}
+
+/** 
+ * GET
+ *
+ * Used by Admin Manage Events.
+ */
+export async function GET() {
+  try {
+    const profile = await requireAdmin();
+
+    if (!profile) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized.",
+        },
+        { status: 401 },
+      );
+    }
+
+    const events = await getAdminEvents();
+
+    return NextResponse.json({
+      success: true,
+      events,
+    });
+  } catch (error) {
+    console.error("Get admin events error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Failed to load events.",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+
+/**
+ * POST
+ *
+ * Creates an event.
+ */
+export async function POST(request: Request) {
+  try {
+    const profile = await requireAdmin();
+
+    if (!profile) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized.",
+        },
+        { status: 401 },
+      );
+    }
+
+    const payload: CreateEventWithLocationInput =
+      await request.json();
+
+    const result = await createEventWithLocation(
+      payload,
+    );
+
+    return NextResponse.json(result, {
+      status: 201,
+    });
+  } catch (error) {
+    console.error("Create event error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to create event.",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+
+/**
+ * PATCH
+ *
+ * Used for:
+ * 1. Updating an event
+ * 2. Reactivating an event
+ */
+export async function PATCH(request: Request) {
+  try {
+    const profile = await requireAdmin();
+
+    if (!profile) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized.",
+        },
+        { status: 401 },
+      );
+    }
+
+    const body = await request.json();
+
+    /*
+     * Reactivate
+     */
+    if (body.action === "reactivate") {
+      const eventId = Number(body.id);
+
+      if (!Number.isInteger(eventId)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid event ID.",
+          },
+          { status: 400 },
+        );
+      }
+
+      const result = await reactivateEvent(eventId);
+
+      return NextResponse.json(result);
+    }
+
+    /**
+     * Normal update
+     */
+    const payload: UpdateEventWithLocationInput =
+      body;
+
+    if (!Number.isInteger(payload.id)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid event ID.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const result =
+      await updateEventWithLocation(payload);
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("Update event error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to update event.",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * DELETE
+ */
+export async function DELETE(request: Request) {
+  try {
+    const profile = await requireAdmin();
+
+    if (!profile) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized.",
+        },
+        { status: 401 },
+      );
+    }
+
+    const { searchParams } = new URL(
+      request.url,
+    );
+
+    const eventId = Number(
+      searchParams.get("id"),
+    );
+
+    if (!Number.isInteger(eventId)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid event ID.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const result =
+      await deleteOrDeactivateEvent(eventId);
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("Delete event error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to delete event.",
+      },
+      { status: 500 },
+    );
+  }
 }
