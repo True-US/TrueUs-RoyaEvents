@@ -5,13 +5,13 @@ import {
   isAdminRole,
 } from "@/features/auth/current-profile";
 
-import { getAdminEvents } from "@/features/events/queries";
 
 import type {
   CreateEventWithLocationInput,
   UpdateEventWithLocationInput,
 } from "@/features/events/types";
 import { createEventWithLocation, deleteOrDeactivateEvent, reactivateEvent, updateEventWithLocation } from "@/features/events/server/service";
+import { getAdminEvents } from "@/features/events/server/queries";
 
 async function requireAdmin() {
   const profile = await getCurrentProfile();
