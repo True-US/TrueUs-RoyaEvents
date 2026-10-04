@@ -1,6 +1,7 @@
 // Fails the build if a Client Component imports this file.
 import "server-only";
 
+import { EVENT_TYPE } from "@/features/events/constants";
 import { prisma } from "@/lib/supabase/prisma";
 import type {
   CreateEventWithLocationInput,
@@ -59,8 +60,9 @@ export async function createEventWithLocation(
 
         /*
          * This service is specifically for Events.
+         * Must match EVENT_TYPE.EVENT ("EVENT"), or the public pages won't list it.
          */
-        eventType: "event",
+        eventType: EVENT_TYPE.EVENT,
 
         status: payload.event.status ?? "DRAFT",
 
@@ -136,7 +138,7 @@ export async function updateEventWithLocation(
         /*
          * Keep this as an Event.
          */
-        eventType: "event",
+        eventType: EVENT_TYPE.EVENT,
 
         status: payload.event.status ?? "DRAFT",
 
