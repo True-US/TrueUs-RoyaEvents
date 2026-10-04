@@ -28,6 +28,14 @@ import {
   reactivateEventRequest,
   updateEventRequest,
 } from "@/features/events/api";
+import {
+  getEventRuleErrors,
+  validateEventRules,
+  type EventRuleField,
+  type EventRulesInput,
+} from "@/features/events/schemas";
+import { dateToZonedInput, zonedInputToDate } from "@/features/events/utils/dates";
+import { formatPrice } from "@/features/events/utils/format";
 
 const inputClass =
   "mt-1 w-full rounded-md border border-roya-slate/30 bg-white px-3 py-2 text-sm text-roya-ink outline-none focus:border-roya-sun focus:ring-1 focus:ring-roya-sun";
@@ -74,6 +82,57 @@ const emptyForm: EventForm = {
   country: "Canada",
 };
 
+// Same look as inputClass, with a red border and ring for invalid fields.
+const invalidInputClass: string =
+  "mt-1 w-full rounded-md border border-red-500 bg-white px-3 py-2 text-sm text-roya-ink outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500";
+
+/**
+ * Reads a number input, where an empty box means "not set".
+ * @param value The input's text.
+ * @returns The number, null when empty, or NaN when not a number (the rules report it).
+ */
+function toNumberOrNull(value: string): number | null {
+  if (value.trim() === "") {
+    return null;
+  }
+
+  return Number(value);
+}
+
+/**
+ * Picks the fields checked by the event rules from the form.
+ * @param form The current form values.
+ * @returns The rules input: numbers for price/spots, raw datetime-local strings for dates.
+ */
+function toRulesInput(form: EventForm): EventRulesInput {
+  return {
+    price: toNumberOrNull(form.price),
+    capacity: toNumberOrNull(form.capacity),
+    availableSpots: toNumberOrNull(form.availableSpots),
+    startDatetime: form.startDatetime,
+    endDatetime: form.endDatetime || null,
+  };
+}
+
+/**
+ * Red message under an input. Renders nothing when there is no error.
+ * @param props.id The id the input points to with aria-describedby.
+ * @param props.message The error message, if any.
+ * @returns The message paragraph, or null.
+ */
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) {
+    return null;
+  }
+
+  return (
+    // aria-live: screen readers announce the message when it appears.
+    <p aria-live="polite" className="mt-1 text-sm text-red-600" id={id}>
+      {message}
+    </p>
+  );
+}
+
 export function ManageEvents() {
   const [events, setEvents] = useState<AdminEvent[]>(
     [],
@@ -94,59 +153,81 @@ export function ManageEvents() {
   const [message, setMessage] =
     useState("");
 
-  async function loadEvents() {
-  try {
-    setLoading(true);
-    setMessage("");
+  // Fields the admin has changed. Errors show only for these (or after a
+  // submit attempt), so a fresh form doesn't open covered in red.
+  const [touched, setTouched] = useState<Partial<Record<keyof EventForm, boolean>>>({});
+  const [submitAttempted, setSubmitAttempted] = useState<boolean>(false);
 
-    const result = await getAdminEventsRequest();
+  // Derived from the form on every render (every keystroke), so it is never
+  // out of date. No extra state or useEffect needed.
+  const ruleErrors: Partial<Record<EventRuleField, string>> = getEventRuleErrors(toRulesInput(form));
 
-    setEvents(result.events ?? []);
-  } catch (error) {
-    setMessage(
-      error instanceof Error
-        ? error.message
-        : "Failed to load events.",
-    );
-  } finally {
-    setLoading(false);
+  /**
+   * The error to show under a field right now.
+   * @param field The field to check.
+   * @returns The message once the field is touched or a submit was tried; otherwise undefined.
+   */
+  function fieldError(field: EventRuleField): string | undefined {
+    if (!touched[field] && !submitAttempted) {
+      return undefined;
+    }
+
+    return ruleErrors[field];
   }
-}
 
-useEffect(() => {
-  let cancelled = false;
-
-  async function loadInitialEvents() {
+  async function loadEvents() {
     try {
       setLoading(true);
       setMessage("");
 
       const result = await getAdminEventsRequest();
 
-      if (!cancelled) {
-        setEvents(result.events ?? []);
-      }
+      setEvents(result.events ?? []);
     } catch (error) {
-      if (!cancelled) {
-        setMessage(
-          error instanceof Error
-            ? error.message
-            : "Failed to load events.",
-        );
-      }
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to load events.",
+      );
     } finally {
-      if (!cancelled) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   }
 
-  loadInitialEvents();
+  useEffect(() => {
+    let cancelled = false;
 
-  return () => {
-    cancelled = true;
-  };
-}, []);
+    async function loadInitialEvents() {
+      try {
+        setLoading(true);
+        setMessage("");
+
+        const result = await getAdminEventsRequest();
+
+        if (!cancelled) {
+          setEvents(result.events ?? []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setMessage(
+            error instanceof Error
+              ? error.message
+              : "Failed to load events.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadInitialEvents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function updateField<K extends keyof EventForm>(
     field: K,
@@ -156,11 +237,14 @@ useEffect(() => {
       ...current,
       [field]: value,
     }));
+    setTouched((current) => ({ ...current, [field]: true }));
   }
 
   function resetForm() {
     setForm(emptyForm);
     setEditingId(null);
+    setTouched({});
+    setSubmitAttempted(false);
   }
 
   function makeSlug(title: string) {
@@ -173,6 +257,8 @@ useEffect(() => {
 
   function editEvent(event: AdminEvent) {
     setEditingId(Number(event.id));
+    setTouched({});
+    setSubmitAttempted(false);
 
     setForm({
       title: event.title,
@@ -185,13 +271,12 @@ useEffect(() => {
           ? ""
           : String(event.price),
 
-      startDatetime: event.startsAt.slice(
-        0,
-        16,
-      ),
+      // Stored moment (UTC) -> Edmonton wall clock for the input.
+      // slice(0, 16) would have shown the UTC time instead.
+      startDatetime: dateToZonedInput(event.startsAt),
 
       endDatetime: event.endsAt
-        ? event.endsAt.slice(0, 16)
+        ? dateToZonedInput(event.endsAt)
         : "",
 
       capacity:
@@ -237,6 +322,13 @@ useEffect(() => {
   ) {
     e.preventDefault();
 
+    // Show every field's error, even untouched ones, and stop here if any.
+    setSubmitAttempted(true);
+    if (Object.keys(ruleErrors).length > 0) {
+      setMessage("Please fix the fields marked in red.");
+      return;
+    }
+
     try {
       setSaving(true);
       setMessage("");
@@ -256,76 +348,76 @@ useEffect(() => {
           ? capacity
           : Number(form.availableSpots);
 
-      if (
-        price !== null &&
-        !Number.isFinite(price)
-      ) {
-        throw new Error("Invalid price.");
+      // Same rules as /api/events (price, spots, dates), checked here first
+      // so the admin gets the message without a round trip.
+      const checked: ReturnType<typeof validateEventRules> = validateEventRules({
+        price,
+        capacity,
+        availableSpots,
+        startDatetime: form.startDatetime,
+        endDatetime: form.endDatetime || null,
+      });
+      if (checked.error !== undefined) {
+        throw new Error(checked.error);
       }
 
-      if (
-        capacity !== null &&
-        !Number.isInteger(capacity)
-      ) {
-        throw new Error(
-          "Capacity must be a whole number.",
-        );
+      // The inputs hold Edmonton wall-clock times. Convert them to exact
+      // moments here, so the server (UTC on Vercel) saves the right time.
+      const startMoment: Date | null = zonedInputToDate(form.startDatetime);
+      if (!startMoment) {
+        throw new Error("Start date and time is not valid.");
       }
-
-      if (
-        availableSpots !== null &&
-        !Number.isInteger(availableSpots)
-      ) {
-        throw new Error(
-          "Available spots must be a whole number.",
-        );
-      }
+      const endMoment: Date | null = form.endDatetime
+        ? zonedInputToDate(form.endDatetime)
+        : null;
 
       /*
        * CREATE
        */
       if (editingId === null) {
         const payload: CreateEventWithLocationInput =
-          {
-            location: {
-              name: form.locationName,
-              address:
-                form.address || null,
-              city: form.city,
-              province: form.province,
-              postalCode:
-                form.postalCode || null,
-              country: form.country,
-            },
+        {
+          location: {
+            name: form.locationName,
+            address:
+              form.address || null,
+            city: form.city,
+            province: form.province,
+            postalCode:
+              form.postalCode || null,
+            country: form.country,
+          },
 
-            event: {
-              title: form.title,
-              slug:
-                form.slug ||
-                makeSlug(form.title),
+          event: {
+            title: form.title,
+            slug:
+              form.slug ||
+              makeSlug(form.title),
 
-              shortDescription:
-                form.shortDescription ||
-                null,
+            shortDescription:
+              form.shortDescription ||
+              null,
 
-              description:
-                form.description || null,
+            description:
+              form.description || null,
 
-              price,
+            // Normalized by validateEventRules: 0 and empty are both null (free).
+            price: checked.data.price,
 
-              startDatetime:
-                form.startDatetime,
+            // ISO with "Z", e.g. "2026-10-11T01:00:00.000Z".
+            startDatetime: startMoment.toISOString(),
 
-              endDatetime:
-                form.endDatetime || null,
+            endDatetime: endMoment
+              ? endMoment.toISOString()
+              : null,
 
-              capacity,
-              availableSpots,
+            capacity,
+            availableSpots,
 
-              status: form.status,
-              isActive: form.isActive,
-            },
-          };
+            status: form.status,
+            isActive: form.isActive,
+          },
+        };
 
         await createEventRequest(
           payload,
@@ -358,54 +450,56 @@ useEffect(() => {
         }
 
         const payload: UpdateEventWithLocationInput =
-          {
-            id: editingId,
+        {
+          id: editingId,
 
-            location: {
-              id: existingEvent.location.id,
+          location: {
+            id: existingEvent.location.id,
 
-              name: form.locationName,
+            name: form.locationName,
 
-              address:
-                form.address || null,
+            address:
+              form.address || null,
 
-              city: form.city,
+            city: form.city,
 
-              province: form.province,
+            province: form.province,
 
-              postalCode:
-                form.postalCode || null,
+            postalCode:
+              form.postalCode || null,
 
-              country: form.country,
-            },
+            country: form.country,
+          },
 
-            event: {
-              title: form.title,
+          event: {
+            title: form.title,
 
-              slug: form.slug,
+            slug: form.slug,
 
-              shortDescription:
-                form.shortDescription ||
-                null,
+            shortDescription:
+              form.shortDescription ||
+              null,
 
-              description:
-                form.description || null,
+            description:
+              form.description || null,
 
-              price,
+            // Normalized by validateEventRules: 0 and empty are both null (free).
+            price: checked.data.price,
 
-              startDatetime:
-                form.startDatetime,
+            // ISO with "Z", e.g. "2026-10-11T01:00:00.000Z".
+            startDatetime: startMoment.toISOString(),
 
-              endDatetime:
-                form.endDatetime || null,
+            endDatetime: endMoment
+              ? endMoment.toISOString()
+              : null,
 
-              capacity,
-              availableSpots,
+            capacity,
+            availableSpots,
 
-              status: form.status,
-              isActive: form.isActive,
-            },
-          };
+            status: form.status,
+            isActive: form.isActive,
+          },
+        };
 
         await updateEventRequest(
           payload,
@@ -556,10 +650,12 @@ useEffect(() => {
                             <strong>
                               Price:
                             </strong>{" "}
-                            {event.price ===
-                            null
-                              ? "Free"
-                              : `$${event.price}`}
+                            {/* Same "Free" / "$35" / "$12.50" text as the public pages. */}
+                            {formatPrice(
+                              event.price === null
+                                ? null
+                                : Number(event.price),
+                            )}
                           </p>
 
                           <p>
@@ -641,7 +737,7 @@ useEffect(() => {
           </div>
         </section>
 
-        
+
       </div>
 
       <div>
@@ -737,12 +833,15 @@ useEffect(() => {
           </div>
 
           <div>
-            <label className="text-sm font-semibold">
+            <label className="text-sm font-semibold" htmlFor="event-price">
               Price
             </label>
 
             <input
-              className={inputClass}
+              aria-describedby="event-price-error"
+              aria-invalid={Boolean(fieldError("price"))}
+              className={fieldError("price") ? invalidInputClass : inputClass}
+              id="event-price"
               type="number"
               min="0"
               step="0.01"
@@ -754,15 +853,19 @@ useEffect(() => {
                 )
               }
             />
+            <FieldError id="event-price-error" message={fieldError("price")} />
           </div>
 
           <div>
-            <label className="text-sm font-semibold">
+            <label className="text-sm font-semibold" htmlFor="event-capacity">
               Capacity
             </label>
 
             <input
-              className={inputClass}
+              aria-describedby="event-capacity-error"
+              aria-invalid={Boolean(fieldError("capacity"))}
+              className={fieldError("capacity") ? invalidInputClass : inputClass}
+              id="event-capacity"
               type="number"
               min="0"
               value={form.capacity}
@@ -773,15 +876,19 @@ useEffect(() => {
                 )
               }
             />
+            <FieldError id="event-capacity-error" message={fieldError("capacity")} />
           </div>
 
           <div>
-            <label className="text-sm font-semibold">
+            <label className="text-sm font-semibold" htmlFor="event-available-spots">
               Available Spots
             </label>
 
             <input
-              className={inputClass}
+              aria-describedby="event-available-spots-error"
+              aria-invalid={Boolean(fieldError("availableSpots"))}
+              className={fieldError("availableSpots") ? invalidInputClass : inputClass}
+              id="event-available-spots"
               type="number"
               min="0"
               value={
@@ -794,6 +901,7 @@ useEffect(() => {
                 )
               }
             />
+            <FieldError id="event-available-spots-error" message={fieldError("availableSpots")} />
           </div>
 
           <div>
@@ -826,12 +934,15 @@ useEffect(() => {
           </div>
 
           <div>
-            <label className="text-sm font-semibold">
-              Start Date & Time
+            <label className="text-sm font-semibold" htmlFor="event-start">
+              Start Date & Time (Edmonton time)
             </label>
 
             <input
-              className={inputClass}
+              aria-describedby="event-start-error"
+              aria-invalid={Boolean(fieldError("startDatetime"))}
+              className={fieldError("startDatetime") ? invalidInputClass : inputClass}
+              id="event-start"
               type="datetime-local"
               value={
                 form.startDatetime
@@ -844,15 +955,19 @@ useEffect(() => {
               }
               required
             />
+            <FieldError id="event-start-error" message={fieldError("startDatetime")} />
           </div>
 
           <div>
-            <label className="text-sm font-semibold">
-              End Date & Time
+            <label className="text-sm font-semibold" htmlFor="event-end">
+              End Date & Time (Edmonton time)
             </label>
 
             <input
-              className={inputClass}
+              aria-describedby="event-end-error"
+              aria-invalid={Boolean(fieldError("endDatetime"))}
+              className={fieldError("endDatetime") ? invalidInputClass : inputClass}
+              id="event-end"
               type="datetime-local"
               value={
                 form.endDatetime
@@ -864,6 +979,7 @@ useEffect(() => {
                 )
               }
             />
+            <FieldError id="event-end-error" message={fieldError("endDatetime")} />
           </div>
 
           <div className="md:col-span-2">

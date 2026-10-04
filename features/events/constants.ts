@@ -52,3 +52,6 @@ export const LOW_SPOTS_THRESHOLD: number = 5;
 
 // Supabase Storage bucket holding event cover images.
 export const EVENT_COVER_BUCKET: string = "event-covers";
+
+// An event's end must be at least this many minutes after its start.
+export const MIN_EVENT_DURATION_MINUTES: number = 10;
