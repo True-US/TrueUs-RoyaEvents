@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/browser";
+import { checkActiveProfileForLogin } from "@/features/auth/actions";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
@@ -19,16 +20,33 @@ export function LoginForm() {
     const supabase = createClient();
 
     async function checkAuth() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-      if (user) {
-        router.replace("/");
-        return;
+        if (user) {
+          const profileStatus = await checkActiveProfileForLogin();
+
+          if (profileStatus.isActive) {
+            router.replace("/");
+            return;
+          }
+
+          const { error: signOutError } = await supabase.auth.signOut();
+          if (signOutError) throw signOutError;
+          setError(profileStatus.message);
+        }
+      } catch (authError) {
+        await supabase.auth.signOut();
+        setError(
+          authError instanceof Error
+            ? authError.message
+            : "Unable to verify account status. Please try again.",
+        );
+      } finally {
+        setCheckingAuth(false);
       }
-
-      setCheckingAuth(false);
     }
 
     checkAuth();
@@ -48,10 +66,9 @@ export function LoginForm() {
 
     setLoading(true);
     setError("");
+    const supabase = createClient();
 
     try {
-      const supabase = createClient();
-
       const { data, error: signInError } =
         await supabase.auth.signInWithPassword({
           email: trimmedEmail,
@@ -67,9 +84,19 @@ export function LoginForm() {
         setError("Unable to log in. Please try again.");
         return;
       }
+
+      const profileStatus = await checkActiveProfileForLogin();
+      if (!profileStatus.isActive) {
+        const { error: signOutError } = await supabase.auth.signOut();
+        if (signOutError) throw signOutError;
+        setError(profileStatus.message);
+        return;
+      }
+
       router.replace("/");
       router.refresh();
     } catch (err) {
+      await supabase.auth.signOut();
       setError(err instanceof Error ? err.message : "Unable to log in.");
     } finally {
       setLoading(false);
