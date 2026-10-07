@@ -31,7 +31,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${barlowCondensed.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      {/* suppressHydrationWarning: browser extensions (e.g. Grammarly) add
+          attributes to <body> before React loads. This ignores attribute
+          differences on <body> only; its children are still checked. */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

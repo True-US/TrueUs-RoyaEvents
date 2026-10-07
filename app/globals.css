@@ -26,3 +26,67 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Make sure the page doesn't jump when a modal opens and the scrollbar disappears. */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* While a modal <dialog> is open, stop the page behind it from scrolling. */
+body:has(dialog[open]) {
+  overflow: hidden;
+}
+
+/* ---------- Animated modal dialog ----------
+   Opening: fade in and rise slightly; closing: the reverse.
+   - @starting-style gives the "before" values for the opening animation.
+   - display/overlay with allow-discrete keep the dialog visible until the
+     closing fade finishes (browsers without support just close instantly). */
+.roya-dialog {
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  transition:
+    opacity 200ms ease-out,
+    transform 200ms ease-out,
+    overlay 200ms allow-discrete,
+    display 200ms allow-discrete;
+}
+
+.roya-dialog[open] {
+  opacity: 1;
+  transform: none;
+}
+
+@starting-style {
+  .roya-dialog[open] {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+
+/* The dimmed page behind the popup: roya-ink (#0a161d) at 60%. */
+.roya-dialog::backdrop {
+  background-color: rgb(10 22 29 / 0);
+  transition:
+    background-color 200ms ease-out,
+    overlay 200ms allow-discrete,
+    display 200ms allow-discrete;
+}
+
+.roya-dialog[open]::backdrop {
+  background-color: rgb(10 22 29 / 0.6);
+}
+
+@starting-style {
+  .roya-dialog[open]::backdrop {
+    background-color: rgb(10 22 29 / 0);
+  }
+}
+
+/* Respect the OS "reduce motion" setting: no animation, just show/hide. */
+@media (prefers-reduced-motion: reduce) {
+  .roya-dialog,
+  .roya-dialog::backdrop {
+    transition: none;
+  }
+}
