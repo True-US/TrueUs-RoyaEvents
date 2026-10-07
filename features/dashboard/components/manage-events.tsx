@@ -12,7 +12,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import type {
@@ -157,6 +157,50 @@ export function ManageEvents() {
   // submit attempt), so a fresh form doesn't open covered in red.
   const [touched, setTouched] = useState<Partial<Record<keyof EventForm, boolean>>>({});
   const [submitAttempted, setSubmitAttempted] = useState<boolean>(false);
+
+  //---------- Create/edit popup -------------
+
+  // Whether the create/edit popup is showing. The single source of truth:
+  // buttons change this, and the effect below shows or hides the dialog.
+  const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  // A <dialog> is opened with showModal() and closed with close(), methods
+  // on the DOM element rather than props, so an effect keeps the element in
+  // step with isFormOpen. showModal() gives the backdrop, keeps keyboard
+  // focus inside the popup and closes on Escape.
+  useEffect(() => {
+    const dialog: HTMLDialogElement | null = dialogRef.current;
+    if (!dialog) {
+      return;
+    }
+
+    if (isFormOpen && !dialog.open) {
+      dialog.showModal();
+    }
+    if (!isFormOpen && dialog.open) {
+      dialog.close();
+    }
+  }, [isFormOpen]);
+
+  /**
+   * Opens the popup with an empty form for a new event.
+   */
+  function openCreateForm(): void {
+    resetForm();
+    setMessage("");
+    setIsFormOpen(true);
+  }
+
+  /**
+   * Closes the popup. Also runs when the browser closes the dialog itself
+   * (Escape), through the dialog's onClose. The form is not cleared here, so
+   * its content stays put during the fade-out; opening the popup again
+   * (Create or Edit) sets the form fresh.
+   */
+  function closeForm(): void {
+    setIsFormOpen(false);
+  }
 
   // Derived from the form on every render (every keystroke), so it is never
   // out of date. No extra state or useEffect needed.
@@ -311,10 +355,9 @@ export function ManageEvents() {
         event.location?.country ?? "Canada",
     });
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    // Open the same popup, filled with this event.
+    setMessage("");
+    setIsFormOpen(true);
   }
 
   async function handleSubmit(
@@ -510,7 +553,7 @@ export function ManageEvents() {
         );
       }
 
-      resetForm();
+      setIsFormOpen(false);
 
       await loadEvents();
     } catch (error) {
@@ -599,13 +642,32 @@ export function ManageEvents() {
         </p>
 
         <section>
-          <h2 className="font-display text-2xl font-bold text-roya-ink">
-            All Events
-          </h2>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="font-display text-2xl font-bold text-roya-ink">
+                All Events
+              </h2>
 
-          <p className="mt-1 text-sm text-roya-slate">
-            Active and inactive events are shown here.
-          </p>
+              <p className="mt-1 text-sm text-roya-slate">
+                Active and inactive events are shown here.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={openCreateForm}
+              className="rounded-md bg-roya-sun px-5 py-2.5 text-sm font-bold text-roya-ink hover:opacity-90"
+            >
+              New Event/Adventure
+            </button>
+          </div>
+
+          {/* Results (saved, deleted, errors) show on the page while the popup is closed. */}
+          {message && !isFormOpen && (
+            <div className="mt-4 rounded-md border border-roya-slate/20 bg-white px-4 py-3 text-sm text-roya-ink">
+              {message}
+            </div>
+          )}
 
           <div className="mt-5">
             {loading ? (
@@ -740,403 +802,433 @@ export function ManageEvents() {
 
       </div>
 
-      <div>
-        <h2 className="mt-2 font-display text-3xl font-bold text-roya-ink">
-          {editingId === null
-            ? "Create Event"
-            : "Edit Event"}
-        </h2>
-      </div>
+      {/* Create/edit popup. Shown and hidden by the isFormOpen effect (showModal/close). */}
+      <dialog
+        ref={dialogRef}
+        aria-labelledby="event-form-title"
+        onClose={closeForm}
+        onCancel={(e) => {
+          if (saving) {
+            e.preventDefault();
+          }
+        }}
 
-      {message && (
-        <div className="rounded-md border border-roya-slate/20 bg-white px-4 py-3 text-sm text-roya-ink">
-          {message}
-        </div>
-      )}
-
-      <form
-        onSubmit={handleSubmit}
-        className="rounded-xl border border-roya-slate/20 bg-white p-6 shadow-sm"
+        className="roya-dialog m-auto max-h-[90vh] w-[calc(100%-2rem)] max-w-3xl flex-col overflow-hidden rounded-xl bg-roya-sand p-0 shadow-xl open:flex"
       >
-        <div className="grid gap-5 md:grid-cols-2">
-          <div>
-            <label className="text-sm font-semibold">
-              Event Title
-            </label>
-
-            <input
-              className={inputClass}
-              value={form.title}
-              onChange={(e) =>
-                updateField(
-                  "title",
-                  e.target.value,
-                )
-              }
-              required
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold">
-              Slug
-            </label>
-
-            <input
-              className={inputClass}
-              value={form.slug}
-              onChange={(e) =>
-                updateField(
-                  "slug",
-                  e.target.value,
-                )
-              }
-              required
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-sm font-semibold">
-              Short Description
-            </label>
-
-            <input
-              className={inputClass}
-              value={
-                form.shortDescription
-              }
-              onChange={(e) =>
-                updateField(
-                  "shortDescription",
-                  e.target.value,
-                )
-              }
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-sm font-semibold">
-              Description
-            </label>
-
-            <textarea
-              className={inputClass}
-              rows={5}
-              value={form.description}
-              onChange={(e) =>
-                updateField(
-                  "description",
-                  e.target.value,
-                )
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold" htmlFor="event-price">
-              Price
-            </label>
-
-            <input
-              aria-describedby="event-price-error"
-              aria-invalid={Boolean(fieldError("price"))}
-              className={fieldError("price") ? invalidInputClass : inputClass}
-              id="event-price"
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.price}
-              onChange={(e) =>
-                updateField(
-                  "price",
-                  e.target.value,
-                )
-              }
-            />
-            <FieldError id="event-price-error" message={fieldError("price")} />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold" htmlFor="event-capacity">
-              Capacity
-            </label>
-
-            <input
-              aria-describedby="event-capacity-error"
-              aria-invalid={Boolean(fieldError("capacity"))}
-              className={fieldError("capacity") ? invalidInputClass : inputClass}
-              id="event-capacity"
-              type="number"
-              min="0"
-              value={form.capacity}
-              onChange={(e) =>
-                updateField(
-                  "capacity",
-                  e.target.value,
-                )
-              }
-            />
-            <FieldError id="event-capacity-error" message={fieldError("capacity")} />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold" htmlFor="event-available-spots">
-              Available Spots
-            </label>
-
-            <input
-              aria-describedby="event-available-spots-error"
-              aria-invalid={Boolean(fieldError("availableSpots"))}
-              className={fieldError("availableSpots") ? invalidInputClass : inputClass}
-              id="event-available-spots"
-              type="number"
-              min="0"
-              value={
-                form.availableSpots
-              }
-              onChange={(e) =>
-                updateField(
-                  "availableSpots",
-                  e.target.value,
-                )
-              }
-            />
-            <FieldError id="event-available-spots-error" message={fieldError("availableSpots")} />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold">
-              Status
-            </label>
-
-            <select
-              className={inputClass}
-              value={form.status}
-              onChange={(e) =>
-                updateField(
-                  "status",
-                  e.target.value,
-                )
-              }
-            >
-              <option value="DRAFT">
-                Draft
-              </option>
-
-              <option value="PUBLISHED">
-                Published
-              </option>
-
-              <option value="UNPUBLISHED">
-                Unpublished
-              </option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold" htmlFor="event-start">
-              Start Date & Time (Edmonton time)
-            </label>
-
-            <input
-              aria-describedby="event-start-error"
-              aria-invalid={Boolean(fieldError("startDatetime"))}
-              className={fieldError("startDatetime") ? invalidInputClass : inputClass}
-              id="event-start"
-              type="datetime-local"
-              value={
-                form.startDatetime
-              }
-              onChange={(e) =>
-                updateField(
-                  "startDatetime",
-                  e.target.value,
-                )
-              }
-              required
-            />
-            <FieldError id="event-start-error" message={fieldError("startDatetime")} />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold" htmlFor="event-end">
-              End Date & Time (Edmonton time)
-            </label>
-
-            <input
-              aria-describedby="event-end-error"
-              aria-invalid={Boolean(fieldError("endDatetime"))}
-              className={fieldError("endDatetime") ? invalidInputClass : inputClass}
-              id="event-end"
-              type="datetime-local"
-              value={
-                form.endDatetime
-              }
-              onChange={(e) =>
-                updateField(
-                  "endDatetime",
-                  e.target.value,
-                )
-              }
-            />
-            <FieldError id="event-end-error" message={fieldError("endDatetime")} />
-          </div>
-
-          <div className="md:col-span-2">
-            <h3 className="font-display text-xl font-bold text-roya-ink">
-              Location
-            </h3>
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-sm font-semibold">
-              Location Name
-            </label>
-
-            <input
-              className={inputClass}
-              value={
-                form.locationName
-              }
-              onChange={(e) =>
-                updateField(
-                  "locationName",
-                  e.target.value,
-                )
-              }
-              required
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-sm font-semibold">
-              Address
-            </label>
-
-            <input
-              className={inputClass}
-              value={form.address}
-              onChange={(e) =>
-                updateField(
-                  "address",
-                  e.target.value,
-                )
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold">
-              City
-            </label>
-
-            <input
-              className={inputClass}
-              value={form.city}
-              onChange={(e) =>
-                updateField(
-                  "city",
-                  e.target.value,
-                )
-              }
-              required
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold">
-              Province
-            </label>
-
-            <input
-              className={inputClass}
-              value={form.province}
-              onChange={(e) =>
-                updateField(
-                  "province",
-                  e.target.value,
-                )
-              }
-              required
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold">
-              Postal Code
-            </label>
-
-            <input
-              className={inputClass}
-              value={form.postalCode}
-              onChange={(e) =>
-                updateField(
-                  "postalCode",
-                  e.target.value,
-                )
-              }
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold">
-              Country
-            </label>
-
-            <input
-              className={inputClass}
-              value={form.country}
-              onChange={(e) =>
-                updateField(
-                  "country",
-                  e.target.value,
-                )
-              }
-              required
-            />
-          </div>
-
-          <label className="flex items-center gap-2 text-sm font-semibold">
-            <input
-              type="checkbox"
-              checked={form.isActive}
-              onChange={(e) =>
-                updateField(
-                  "isActive",
-                  e.target.checked,
-                )
-              }
-            />
-
-            Active
-          </label>
-        </div>
-
-        <div className="mt-6 flex gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-md bg-roya-sun px-5 py-2.5 text-sm font-bold text-roya-ink hover:opacity-90 disabled:opacity-50"
+        {/* Header: doesn't scroll; the form area below does. */}
+        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-roya-slate/20 bg-white px-6 py-4">
+          <h2
+            id="event-form-title"
+            className="font-display text-3xl font-bold text-roya-ink"
           >
-            {saving
-              ? "Saving..."
-              : editingId === null
-                ? "Create Event"
-                : "Update Event"}
+            {editingId === null
+              ? "Create Event"
+              : "Edit Event"}
+          </h2>
+
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={closeForm}
+            disabled={saving}
+            className="rounded-md px-3 py-1 text-2xl leading-none text-roya-slate hover:bg-roya-slate/10 hover:text-roya-ink disabled:opacity-50"
+          >
+            ×
           </button>
-
-          {editingId !== null && (
-            <button
-              type="button"
-              onClick={resetForm}
-              className="rounded-md border border-roya-slate/30 px-5 py-2.5 text-sm font-semibold text-roya-ink hover:bg-roya-slate/5"
-            >
-              Cancel
-            </button>
-          )}
         </div>
-      </form>
 
+        {/* Scrolling area. min-h-0 lets it shrink inside the flex column. */}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6 [scrollbar-width:thin]">
+          {/* Save errors show inside the popup, next to the form. */}
+          {message && isFormOpen && (
+            <div className="rounded-md border border-roya-slate/20 bg-white px-4 py-3 text-sm text-roya-ink">
+              {message}
+            </div>
+          )}
+
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-xl border border-roya-slate/20 bg-white p-6 shadow-sm"
+          >
+            <div className="grid gap-5 md:grid-cols-2">
+              <div>
+                <label className="text-sm font-semibold">
+                  Event Title
+                </label>
+
+                <input
+                  className={inputClass}
+                  value={form.title}
+                  onChange={(e) =>
+                    updateField(
+                      "title",
+                      e.target.value,
+                    )
+                  }
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold">
+                  Slug
+                </label>
+
+                <input
+                  className={inputClass}
+                  value={form.slug}
+                  onChange={(e) =>
+                    updateField(
+                      "slug",
+                      e.target.value,
+                    )
+                  }
+                  required
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-sm font-semibold">
+                  Short Description
+                </label>
+
+                <input
+                  className={inputClass}
+                  value={
+                    form.shortDescription
+                  }
+                  onChange={(e) =>
+                    updateField(
+                      "shortDescription",
+                      e.target.value,
+                    )
+                  }
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-sm font-semibold">
+                  Description
+                </label>
+
+                <textarea
+                  className={inputClass}
+                  rows={5}
+                  value={form.description}
+                  onChange={(e) =>
+                    updateField(
+                      "description",
+                      e.target.value,
+                    )
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold" htmlFor="event-price">
+                  Price
+                </label>
+
+                <input
+                  aria-describedby="event-price-error"
+                  aria-invalid={Boolean(fieldError("price"))}
+                  className={fieldError("price") ? invalidInputClass : inputClass}
+                  id="event-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.price}
+                  onChange={(e) =>
+                    updateField(
+                      "price",
+                      e.target.value,
+                    )
+                  }
+                />
+                <FieldError id="event-price-error" message={fieldError("price")} />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold" htmlFor="event-capacity">
+                  Capacity
+                </label>
+
+                <input
+                  aria-describedby="event-capacity-error"
+                  aria-invalid={Boolean(fieldError("capacity"))}
+                  className={fieldError("capacity") ? invalidInputClass : inputClass}
+                  id="event-capacity"
+                  type="number"
+                  min="0"
+                  value={form.capacity}
+                  onChange={(e) =>
+                    updateField(
+                      "capacity",
+                      e.target.value,
+                    )
+                  }
+                />
+                <FieldError id="event-capacity-error" message={fieldError("capacity")} />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold" htmlFor="event-available-spots">
+                  Available Spots
+                </label>
+
+                <input
+                  aria-describedby="event-available-spots-error"
+                  aria-invalid={Boolean(fieldError("availableSpots"))}
+                  className={fieldError("availableSpots") ? invalidInputClass : inputClass}
+                  id="event-available-spots"
+                  type="number"
+                  min="0"
+                  value={
+                    form.availableSpots
+                  }
+                  onChange={(e) =>
+                    updateField(
+                      "availableSpots",
+                      e.target.value,
+                    )
+                  }
+                />
+                <FieldError id="event-available-spots-error" message={fieldError("availableSpots")} />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold">
+                  Status
+                </label>
+
+                <select
+                  className={inputClass}
+                  value={form.status}
+                  onChange={(e) =>
+                    updateField(
+                      "status",
+                      e.target.value,
+                    )
+                  }
+                >
+                  <option value="DRAFT">
+                    Draft
+                  </option>
+
+                  <option value="PUBLISHED">
+                    Published
+                  </option>
+
+                  <option value="UNPUBLISHED">
+                    Unpublished
+                  </option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold" htmlFor="event-start">
+                  Start Date & Time (Edmonton time)
+                </label>
+
+                <input
+                  aria-describedby="event-start-error"
+                  aria-invalid={Boolean(fieldError("startDatetime"))}
+                  className={fieldError("startDatetime") ? invalidInputClass : inputClass}
+                  id="event-start"
+                  type="datetime-local"
+                  value={
+                    form.startDatetime
+                  }
+                  onChange={(e) =>
+                    updateField(
+                      "startDatetime",
+                      e.target.value,
+                    )
+                  }
+                  required
+                />
+                <FieldError id="event-start-error" message={fieldError("startDatetime")} />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold" htmlFor="event-end">
+                  End Date & Time (Edmonton time)
+                </label>
+
+                <input
+                  aria-describedby="event-end-error"
+                  aria-invalid={Boolean(fieldError("endDatetime"))}
+                  className={fieldError("endDatetime") ? invalidInputClass : inputClass}
+                  id="event-end"
+                  type="datetime-local"
+                  value={
+                    form.endDatetime
+                  }
+                  onChange={(e) =>
+                    updateField(
+                      "endDatetime",
+                      e.target.value,
+                    )
+                  }
+                />
+                <FieldError id="event-end-error" message={fieldError("endDatetime")} />
+              </div>
+
+              <div className="md:col-span-2">
+                <h3 className="font-display text-xl font-bold text-roya-ink">
+                  Location
+                </h3>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-sm font-semibold">
+                  Location Name
+                </label>
+
+                <input
+                  className={inputClass}
+                  value={
+                    form.locationName
+                  }
+                  onChange={(e) =>
+                    updateField(
+                      "locationName",
+                      e.target.value,
+                    )
+                  }
+                  required
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-sm font-semibold">
+                  Address
+                </label>
+
+                <input
+                  className={inputClass}
+                  value={form.address}
+                  onChange={(e) =>
+                    updateField(
+                      "address",
+                      e.target.value,
+                    )
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold">
+                  City
+                </label>
+
+                <input
+                  className={inputClass}
+                  value={form.city}
+                  onChange={(e) =>
+                    updateField(
+                      "city",
+                      e.target.value,
+                    )
+                  }
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold">
+                  Province
+                </label>
+
+                <input
+                  className={inputClass}
+                  value={form.province}
+                  onChange={(e) =>
+                    updateField(
+                      "province",
+                      e.target.value,
+                    )
+                  }
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold">
+                  Postal Code
+                </label>
+
+                <input
+                  className={inputClass}
+                  value={form.postalCode}
+                  onChange={(e) =>
+                    updateField(
+                      "postalCode",
+                      e.target.value,
+                    )
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold">
+                  Country
+                </label>
+
+                <input
+                  className={inputClass}
+                  value={form.country}
+                  onChange={(e) =>
+                    updateField(
+                      "country",
+                      e.target.value,
+                    )
+                  }
+                  required
+                />
+              </div>
+
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                <input
+                  type="checkbox"
+                  checked={form.isActive}
+                  onChange={(e) =>
+                    updateField(
+                      "isActive",
+                      e.target.checked,
+                    )
+                  }
+                />
+
+                Active
+              </label>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-md bg-roya-sun px-5 py-2.5 text-sm font-bold text-roya-ink hover:opacity-90 disabled:opacity-50"
+              >
+                {saving
+                  ? "Saving..."
+                  : editingId === null
+                    ? "Create Event"
+                    : "Update Event"}
+              </button>
+
+              <button
+                type="button"
+                onClick={closeForm}
+                disabled={saving}
+                className="rounded-md border border-roya-slate/30 px-5 py-2.5 text-sm font-semibold text-roya-ink hover:bg-roya-slate/5 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </dialog>
     </div>
   );
 }
