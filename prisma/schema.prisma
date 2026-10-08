@@ -93,6 +93,9 @@ model EventAdventure {
   shortDescription String? @map("short_description") @db.VarChar(500)
   description      String? @db.Text
 
+  // Storage object path in the "event-covers" bucket (not a full URL),
+  coverImagePath String? @map("cover_image_path") @db.VarChar(500)
+
   price Decimal? @db.Decimal(10, 2)
 
   startDatetime DateTime  @map("start_datetime") @db.Timestamptz

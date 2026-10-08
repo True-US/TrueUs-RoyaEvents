@@ -1,4 +1,4 @@
-import { InquiryForm } from "@/components/forms/InquiryForm";
+import { CustomEventForm } from "@/features/events/components/custom-form";
 import { PageIntro } from "@/components/ui/PageIntro";
 
 export default function CustomEventPage() {
@@ -9,7 +9,7 @@ export default function CustomEventPage() {
         title="Bring us the occasion. We will shape the experience."
         description="Share your goals, group size, timing, and ideas so our team can prepare a thoughtful proposal."
       />
-      <InquiryForm kind="custom_event" submitLabel="Request a proposal" />
+      <CustomEventForm kind="custom_event" submitLabel="Request a proposal" />
     </section>
   );
 }
