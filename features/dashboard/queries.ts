@@ -47,7 +47,8 @@ export async function getUserDashboardBookings(profileId: number) {
         new Date(booking.startsAt).getTime() >= now &&
         booking.isEventActive &&
         booking.isBookingActive &&
-        booking.price !== null,
+        booking.eventStatus === "PUBLISHED" &&
+        booking.status === "CONFIRMED",
     ),
   };
 }

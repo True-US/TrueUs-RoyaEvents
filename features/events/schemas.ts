@@ -138,6 +138,19 @@ export const eventRulesSchema = z
     endDatetime: z.string().nullable().optional(),
   })
   .superRefine((event, ctx) => {
+    if (
+      event.price !== null &&
+      event.price !== undefined &&
+      event.price > 0 &&
+      event.price < 0.5
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["price"],
+        message: "Ticket price must be at least $0.50 or free.",
+      });
+    }
+
     // Rule 2: available spots against capacity.
     const hasSpots: boolean = event.availableSpots !== null && event.availableSpots !== undefined;
     const hasCapacity: boolean = event.capacity !== null && event.capacity !== undefined;

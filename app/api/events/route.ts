@@ -5,13 +5,17 @@ import {
   isAdminRole,
 } from "@/features/auth/current-profile";
 
-
 import type {
   CreateEventInput,
   CreateEventWithLocationInput,
   UpdateEventWithLocationInput,
 } from "@/features/events/types";
-import { createEventWithLocation, deleteOrDeactivateEvent, reactivateEvent, updateEventWithLocation } from "@/features/events/server/service";
+import {
+  createEventWithLocation,
+  deleteOrDeactivateEvent,
+  reactivateEvent,
+  updateEventWithLocation,
+} from "@/features/events/server/service";
 import { getAdminEvents } from "@/features/events/server/queries";
 import { validateEventRules } from "@/features/events/schemas";
 
@@ -32,18 +36,27 @@ function hasTimeZone(value: string): boolean {
  */
 function checkEventRules(
   event: CreateEventInput | undefined,
-): { event: CreateEventInput; error?: never } | { event?: never; error: string } {
+):
+  | { event: CreateEventInput; error?: never }
+  | { event?: never; error: string } {
   if (!event) {
     return { error: "Event details are missing." };
   }
 
   // Times must name their zone ("...Z" or "...-06:00"). A bare "2026-10-10T19:00"
   // would be read in the server's zone, which is UTC on Vercel.
-  if (!hasTimeZone(event.startDatetime) || (event.endDatetime && !hasTimeZone(event.endDatetime))) {
-    return { error: "Dates must include a time zone (ISO 8601, e.g. 2026-10-11T01:00:00.000Z)." };
+  if (
+    !hasTimeZone(event.startDatetime) ||
+    (event.endDatetime && !hasTimeZone(event.endDatetime))
+  ) {
+    return {
+      error:
+        "Dates must include a time zone (ISO 8601, e.g. 2026-10-11T01:00:00.000Z).",
+    };
   }
 
-  const result: ReturnType<typeof validateEventRules> = validateEventRules(event);
+  const result: ReturnType<typeof validateEventRules> =
+    validateEventRules(event);
   if (result.error !== undefined) {
     return { error: result.error };
   }
@@ -69,7 +82,7 @@ async function requireAdmin() {
   return profile;
 }
 
-/** 
+/**
  * GET
  *
  * Used by Admin Manage Events.
@@ -107,30 +120,31 @@ export async function GET() {
   }
 }
 
-
 /**
  * POST
  *
  * Creates an event.
  */
 export async function POST(request: Request) {
+  const payload: CreateEventWithLocationInput = await request.json();
   try {
-    const profile = await requireAdmin();
+    if (payload.event.eventType !== "custom_event") {
+      const profile = await requireAdmin();
 
-    if (!profile) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Unauthorized.",
-        },
-        { status: 401 },
-      );
+      if (!profile) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Unauthorized.",
+          },
+          { status: 401 },
+        );
+      }
     }
 
-    const payload: CreateEventWithLocationInput =
-      await request.json();
-
-    const checked: ReturnType<typeof checkEventRules> = checkEventRules(payload?.event);
+    const checked: ReturnType<typeof checkEventRules> = checkEventRules(
+      payload?.event,
+    );
     if (checked.error !== undefined) {
       return NextResponse.json(
         { success: false, message: checked.error },
@@ -153,15 +167,12 @@ export async function POST(request: Request) {
       {
         success: false,
         message:
-          error instanceof Error
-            ? error.message
-            : "Failed to create event.",
+          error instanceof Error ? error.message : "Failed to create event.",
       },
       { status: 500 },
     );
   }
 }
-
 
 /**
  * PATCH
@@ -210,8 +221,7 @@ export async function PATCH(request: Request) {
     /**
      * Normal update
      */
-    const payload: UpdateEventWithLocationInput =
-      body;
+    const payload: UpdateEventWithLocationInput = body;
 
     if (!Number.isInteger(payload.id)) {
       return NextResponse.json(
@@ -223,7 +233,9 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const checked: ReturnType<typeof checkEventRules> = checkEventRules(payload.event);
+    const checked: ReturnType<typeof checkEventRules> = checkEventRules(
+      payload.event,
+    );
     if (checked.error !== undefined) {
       return NextResponse.json(
         { success: false, message: checked.error },
@@ -244,9 +256,7 @@ export async function PATCH(request: Request) {
       {
         success: false,
         message:
-          error instanceof Error
-            ? error.message
-            : "Failed to update event.",
+          error instanceof Error ? error.message : "Failed to update event.",
       },
       { status: 500 },
     );
@@ -270,13 +280,9 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const { searchParams } = new URL(
-      request.url,
-    );
+    const { searchParams } = new URL(request.url);
 
-    const eventId = Number(
-      searchParams.get("id"),
-    );
+    const eventId = Number(searchParams.get("id"));
 
     if (!Number.isInteger(eventId)) {
       return NextResponse.json(
@@ -288,8 +294,7 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const result =
-      await deleteOrDeactivateEvent(eventId);
+    const result = await deleteOrDeactivateEvent(eventId);
 
     return NextResponse.json(result);
   } catch (error) {
@@ -299,9 +304,7 @@ export async function DELETE(request: Request) {
       {
         success: false,
         message:
-          error instanceof Error
-            ? error.message
-            : "Failed to delete event.",
+          error instanceof Error ? error.message : "Failed to delete event.",
       },
       { status: 500 },
     );
