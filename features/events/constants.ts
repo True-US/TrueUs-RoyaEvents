@@ -53,5 +53,16 @@ export const LOW_SPOTS_THRESHOLD: number = 5;
 // Supabase Storage bucket holding event cover images.
 export const EVENT_COVER_BUCKET: string = "event-covers";
 
+// Cover image rules, shared by the browser (cover picker) and the server
+// (cover-storage). Covers are cropped to 2:1 and saved as WebP.
+export const COVER_WIDTH: number = 1600;
+export const COVER_HEIGHT: number = 800;
+export const COVER_CONTENT_TYPE: string = "image/webp";
+// Matches the bucket's file size limit. A compressed cover is ~200-400 KB.
+export const COVER_MAX_BYTES: number = 2 * 1024 * 1024;
+// Smaller source images would look blurry when stretched to the cover size.
+export const COVER_MIN_SOURCE_WIDTH: number = 800;
+export const COVER_MIN_SOURCE_HEIGHT: number = 400;
+
 // An event's end must be at least this many minutes after its start.
 export const MIN_EVENT_DURATION_MINUTES: number = 10;

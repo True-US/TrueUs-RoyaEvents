@@ -24,9 +24,9 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      // Covers are compressed to ~200-400 KB in the browser; 2 MB leaves room
-      // for the multipart overhead and the other form fields.
-      bodySizeLimit: "2mb",
+      // A cover may be up to 2 MB (COVER_MAX_BYTES; ~200-400 KB in practice).
+      // 3 MB leaves room for the event fields and the multipart overhead.
+      bodySizeLimit: "3mb",
     },
   },
 };

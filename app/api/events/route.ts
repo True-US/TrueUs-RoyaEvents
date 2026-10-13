@@ -7,49 +7,13 @@ import {
 
 
 import type {
-  CreateEventInput,
   CreateEventWithLocationInput,
   UpdateEventWithLocationInput,
 } from "@/features/events/types";
 import { createEventWithLocation, deleteOrDeactivateEvent, reactivateEvent, updateEventWithLocation } from "@/features/events/server/service";
 import { getAdminEvents } from "@/features/events/server/queries";
-import { validateEventRules } from "@/features/events/schemas";
-
-/**
- * Checks that a date string ends with a zone: "Z" or an offset like "-06:00".
- * @param value The date string from the payload.
- * @returns True when the moment it describes is unambiguous.
- */
-function hasTimeZone(value: string): boolean {
-  return /(Z|[+-]\d{2}:\d{2})$/.test(value);
-}
-
-/**
- * Applies the event business rules (price, spots, dates) to a payload's event.
- * The form checks the same rules, but the server must not trust the browser.
- * @param event The event part of a create/update payload.
- * @returns The event with its price normalized (0 -> null), or an error message.
- */
-function checkEventRules(
-  event: CreateEventInput | undefined,
-): { event: CreateEventInput; error?: never } | { event?: never; error: string } {
-  if (!event) {
-    return { error: "Event details are missing." };
-  }
-
-  // Times must name their zone ("...Z" or "...-06:00"). A bare "2026-10-10T19:00"
-  // would be read in the server's zone, which is UTC on Vercel.
-  if (!hasTimeZone(event.startDatetime) || (event.endDatetime && !hasTimeZone(event.endDatetime))) {
-    return { error: "Dates must include a time zone (ISO 8601, e.g. 2026-10-11T01:00:00.000Z)." };
-  }
-
-  const result: ReturnType<typeof validateEventRules> = validateEventRules(event);
-  if (result.error !== undefined) {
-    return { error: result.error };
-  }
-
-  return { event: { ...event, price: result.data.price } };
-}
+// Same checks as the admin server actions (features/events/server/actions.ts).
+import { checkEventRules } from "@/features/events/server/event-payload";
 
 async function requireAdmin() {
   const profile = await getCurrentProfile();
