@@ -125,15 +125,19 @@ model EventAdventure {
 model Booking {
   id Int @id @default(autoincrement()) @map("booking_id")
 
-  profileId Int     @map("profile_id")
-  profile   Profile @relation(fields: [profileId], references: [id])
+  profileId Int?     @map("profile_id")
+  profile   Profile? @relation(fields: [profileId], references: [id])
 
   eventAdventureId Int            @map("event_adventure_id")
   eventAdventure   EventAdventure @relation(fields: [eventAdventureId], references: [id])
 
-  quantity    Int     @default(1)
-  unitPrice   Decimal @map("unit_price") @db.Decimal(10, 2)
-  totalAmount Decimal @map("total_amount") @db.Decimal(10, 2)
+  customerName            String? @map("customer_name") @db.VarChar(200)
+  customerEmail           String? @map("customer_email") @db.VarChar(255)
+  stripeCheckoutSessionId String? @unique @map("stripe_checkout_session_id") @db.VarChar(255)
+  stripePaymentIntentId   String? @unique @map("stripe_payment_intent_id") @db.VarChar(255)
+  quantity                Int     @default(1)
+  unitPrice               Decimal @map("unit_price") @db.Decimal(10, 2)
+  totalAmount             Decimal @map("total_amount") @db.Decimal(10, 2)
 
   status   String  @db.VarChar(50)
   isActive Boolean @default(true) @map("is_active")
