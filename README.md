@@ -24,7 +24,10 @@ This project uses:
 - **Tailwind CSS** for styling
 - **Supabase** for the database, authentication, and file storage
 
-The project is currently in the foundation stage. The routes and application structure are ready, while the Supabase database queries, authentication, and production booking integrations will be connected next.
+The application includes public event and adventure browsing, admin management,
+Prisma/PostgreSQL data access, Supabase authentication, and a Stripe-hosted event
+ticket checkout flow. Connecting provider credentials, applying database
+migrations, and configuring production webhooks are deployment steps.
 
 ---
 
@@ -46,15 +49,46 @@ Copy `.env.example` to `.env.local`:
 Copy-Item .env.example .env.local
 ```
 
-Add the Supabase values to `.env.local`:
+Add the Supabase and database values to `.env.local`:
 
 ```env
+DIRECT_URL=your-postgresql-connection-string
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
 Never commit `.env.local` or expose the service-role key in browser code. Environment files are ignored by Git.
+
+### Stripe ticket checkout
+
+Ticket payments use Stripe-hosted Checkout in CAD. Put the Stripe **test-mode**
+secret key in `STRIPE_SECRET_KEY` in `.env.local`; the secret key stays on the
+server and the hosted checkout flow does not need the publishable key.
+`NEXT_PUBLIC_APP_URL` should be `http://localhost:3000` for local development.
+
+Apply the booking schema migration before testing checkout:
+
+```bash
+npx prisma migrate dev
+```
+
+To receive local payment confirmations and release expired ticket reservations,
+install the Stripe CLI and run:
+
+```bash
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+```
+
+Copy the signing secret printed by the CLI into `STRIPE_WEBHOOK_SECRET` in
+`.env.local`, then restart the Next.js development server. In production,
+configure a Stripe webhook endpoint at `/api/webhooks/stripe` for
+`checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+`checkout.session.async_payment_failed`, and `checkout.session.expired`.
+
+Checkout works for signed-in customers and guests. Ticket inventory is reserved
+when checkout begins; the webhook confirms paid bookings and restores inventory
+when a Checkout session expires or its asynchronous payment fails.
 
 ### 3. Start the development server
 
@@ -282,14 +316,14 @@ Keep generic buttons, inputs, and layout components in `components/`. Keep busin
 - Customer header and footer
 - Event and adventure browsing pages
 - Event and adventure detail route placeholders
-- Ticket checkout route placeholder
+- Stripe-hosted event ticket checkout with booking reservations
 - Adventure booking request pages
 - Custom event and private adventure inquiry pages
 - Contact page
 - Admin dashboard and CMS navigation
 - Supabase browser/server client foundation
 - Typed event, adventure, and inquiry database placeholders
-- Inquiry and webhook API route placeholders
+- Inquiry API route and Stripe payment webhook
 
 ### Still needs to be connected
 
@@ -302,7 +336,7 @@ Keep generic buttons, inputs, and layout components in `components/`. Keep busin
 - Admin authorization and protected routes
 - Row Level Security policies
 - Supabase Storage gallery uploads
-- Payment provider and webhook verification
+- Production Stripe credentials and webhook endpoint configuration
 - Automated tests
 
 Some pages currently show empty states because the query functions intentionally return empty arrays until the database schema is created.
