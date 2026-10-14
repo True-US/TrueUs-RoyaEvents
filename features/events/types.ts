@@ -63,6 +63,7 @@ export type AdminEvent = {
   availableSpots: number | null;
   eventType: string;
   isActive: boolean;
+  coverUrl: string | null; // Shown in the edit popup; null when there is no cover.
   location: {
     id: number;
     name: string;
@@ -109,6 +110,8 @@ export type CreateEventInput = {
   isActive?: boolean;
   createdBy?: string | null;
   updatedBy?: string | null;
+  // Set only by the server after a cover upload; never sent by the form.
+  coverImagePath?: string | null;
 };
 
 export type CreateEventWithLocationInput = {
@@ -121,4 +124,18 @@ export type UpdateEventWithLocationInput = {
   location: UpdateEventLocationInput;
   event: CreateEventInput;
 };
+
+/**
+ * What the create/update server actions return. Expected problems come back
+ * as values, not thrown errors: Next.js hides thrown error messages in
+ * production, so the form could not show them.
+ */
+export type EventActionResult =
+  | {
+      success: true;
+      eventId: number;
+      // Set when the event was saved but its cover upload failed.
+      coverError?: string;
+    }
+  | { success: false; message: string };
 

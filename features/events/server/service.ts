@@ -2,6 +2,7 @@
 import "server-only";
 
 import { EVENT_TYPE } from "@/features/events/constants";
+import { deleteEventCoverFolder } from "@/features/events/server/cover-storage";
 import { prisma } from "@/lib/supabase/prisma";
 import type {
   CreateEventWithLocationInput,
@@ -143,6 +144,11 @@ export async function updateEventWithLocation(
         status: payload.event.status ?? "DRAFT",
 
         isActive: payload.event.isActive ?? true,
+
+        // Only when a new cover was uploaded; otherwise keep the current one.
+        ...(payload.event.coverImagePath !== undefined
+          ? { coverImagePath: payload.event.coverImagePath }
+          : {}),
       },
     });
 
@@ -169,7 +175,7 @@ export async function updateEventWithLocation(
 export async function deleteOrDeactivateEvent(
   eventId: number,
 ) {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const event = await tx.eventAdventure.findUnique({
       where: {
         id: eventId,
@@ -223,6 +229,14 @@ export async function deleteOrDeactivateEvent(
       action: "deleted" as const,
     };
   });
+
+  // The row is gone, so its cover files are unused. Done after the
+  // transaction commits: Storage isn't part of the database transaction.
+  if (result.action === "deleted") {
+    await deleteEventCoverFolder(eventId);
+  }
+
+  return result;
 }
 
 /**

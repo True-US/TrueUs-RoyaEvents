@@ -18,16 +18,19 @@ import type { FormEvent } from "react";
 import type {
   AdminEvent,
   CreateEventWithLocationInput,
+  EventActionResult,
   UpdateEventWithLocationInput,
 } from "@/features/events/types";
 
 import {
-  createEventRequest,
   deleteEventRequest,
   getAdminEventsRequest,
   reactivateEventRequest,
-  updateEventRequest,
 } from "@/features/events/api";
+import { CoverInput } from "@/features/events/components/cover-input";
+import { EVENT_STATUS } from "@/features/events/constants";
+// Server Actions: called like normal async functions, but run on the server.
+import { createEventAction, updateEventAction } from "@/features/events/server/actions";
 import {
   getEventRuleErrors,
   validateEventRules,
@@ -115,6 +118,25 @@ function toRulesInput(form: EventForm): EventRulesInput {
 }
 
 /**
+ * Packs a create/update payload and the optional new cover for a Server Action.
+ * @param payload The event + location data.
+ * @param cover The new cover image, or null to keep the current one.
+ * @returns FormData with "payload" (JSON) and, if given, "cover" (File).
+ */
+function buildActionFormData(
+  payload: CreateEventWithLocationInput | UpdateEventWithLocationInput,
+  cover: File | null,
+): FormData {
+  const formData: FormData = new FormData();
+  formData.set("payload", JSON.stringify(payload));
+  if (cover) {
+    formData.set("cover", cover);
+  }
+
+  return formData;
+}
+
+/**
  * Red message under an input. Renders nothing when there is no error.
  * @param props.id The id the input points to with aria-describedby.
  * @param props.message The error message, if any.
@@ -158,6 +180,24 @@ export function ManageEvents() {
   const [touched, setTouched] = useState<Partial<Record<keyof EventForm, boolean>>>({});
   const [submitAttempted, setSubmitAttempted] = useState<boolean>(false);
 
+  //---------- Cover image -------------
+
+  // The new cover picked in the popup (already a 1600x800 WebP), or null.
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  // True while the picker is preparing an image: saving waits for it.
+  const [coverBusy, setCoverBusy] = useState<boolean>(false);
+
+  // The event being edited, for its saved cover. Derived, not stored.
+  const editingEvent: AdminEvent | null =
+    editingId === null ? null : events.find((event: AdminEvent) => Number(event.id) === editingId) ?? null;
+  const currentCoverUrl: string | null = editingEvent?.coverUrl ?? null;
+
+  // Same rule as the server: a published event needs a cover.
+  const coverRequiredError: string | undefined =
+    form.status === EVENT_STATUS.PUBLISHED && !coverFile && !currentCoverUrl
+      ? "A cover image is required to publish. Add one, or save as a draft."
+      : undefined;
+
   //---------- Create/edit popup -------------
 
   // Whether the create/edit popup is showing. The single source of truth:
@@ -188,6 +228,7 @@ export function ManageEvents() {
    */
   function openCreateForm(): void {
     resetForm();
+    setCoverFile(null);
     setMessage("");
     setIsFormOpen(true);
   }
@@ -355,7 +396,9 @@ export function ManageEvents() {
         event.location?.country ?? "Canada",
     });
 
-    // Open the same popup, filled with this event.
+    // Open the same popup, filled with this event (its saved cover shows
+    // through currentCoverUrl; no new image picked yet).
+    setCoverFile(null);
     setMessage("");
     setIsFormOpen(true);
   }
@@ -367,7 +410,11 @@ export function ManageEvents() {
 
     // Show every field's error, even untouched ones, and stop here if any.
     setSubmitAttempted(true);
-    if (Object.keys(ruleErrors).length > 0) {
+    if (coverBusy) {
+      setMessage("Please wait until the cover image is ready.");
+      return;
+    }
+    if (Object.keys(ruleErrors).length > 0 || coverRequiredError) {
       setMessage("Please fix the fields marked in red.");
       return;
     }
@@ -462,9 +509,24 @@ export function ManageEvents() {
           },
         };
 
-        await createEventRequest(
-          payload,
+        // Files can't go in JSON, so the event goes as a JSON entry and the
+        // cover as a File entry of one FormData.
+        const result: EventActionResult = await createEventAction(
+          buildActionFormData(payload, coverFile),
         );
+        if (!result.success) {
+          throw new Error(result.message);
+        }
+
+        if (result.coverError) {
+          // The event exists (as a draft) but its cover failed. Keep the
+          // popup open, now editing the new event, so the admin can retry:
+          // the picked image stays selected.
+          await loadEvents();
+          setEditingId(result.eventId);
+          setMessage(result.coverError);
+          return;
+        }
 
         setMessage(
           "Event created successfully.",
@@ -544,9 +606,12 @@ export function ManageEvents() {
           },
         };
 
-        await updateEventRequest(
-          payload,
+        const result: EventActionResult = await updateEventAction(
+          buildActionFormData(payload, coverFile),
         );
+        if (!result.success) {
+          throw new Error(result.message);
+        }
 
         setMessage(
           "Event updated successfully.",
@@ -851,6 +916,20 @@ export function ManageEvents() {
             className="rounded-xl border border-roya-slate/20 bg-white p-6 shadow-sm"
           >
             <div className="grid gap-5 md:grid-cols-2">
+              {/* Cover first: it's the biggest thing on the public card. */}
+              <div className="md:col-span-2">
+                <CoverInput
+                  currentCoverUrl={currentCoverUrl}
+                  disabled={saving}
+                  // Shown once the admin picks Published, or tries to save.
+                  error={touched.status || submitAttempted ? coverRequiredError : undefined}
+                  file={coverFile}
+                  id="event-cover"
+                  onBusyChange={setCoverBusy}
+                  onFileChange={setCoverFile}
+                />
+              </div>
+
               <div>
                 <label className="text-sm font-semibold">
                   Event Title
@@ -1207,7 +1286,7 @@ export function ManageEvents() {
             <div className="mt-6 flex gap-3">
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || coverBusy}
                 className="rounded-md bg-roya-sun px-5 py-2.5 text-sm font-bold text-roya-ink hover:opacity-90 disabled:opacity-50"
               >
                 {saving
