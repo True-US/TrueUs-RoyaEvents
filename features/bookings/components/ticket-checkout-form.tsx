@@ -2,12 +2,21 @@
 
 import { useState, type FormEvent } from "react";
 
+import { FieldError, FormError } from "@/components/ui/form-feedback";
+import { EMAIL_MAX } from "@/features/auth/constants";
 import { MAX_TICKETS_PER_ORDER } from "@/features/bookings/constants";
+import { checkoutSchema, CUSTOMER_NAME_MAX } from "@/features/bookings/schemas";
+import { getFieldErrors } from "@/lib/validation/errors";
+import { msg } from "@/lib/validation/messages";
 
 const ticketPrice = new Intl.NumberFormat("en-CA", {
   style: "currency",
   currency: "CAD",
 });
+
+const fieldClass: string = "w-full rounded-lg border border-roya-slate/30 px-3 py-2";
+// Red border for fields with an error.
+const invalidFieldClass: string = "w-full rounded-lg border border-red-500 px-3 py-2";
 
 type TicketCheckoutFormProps = {
   slug: string;
@@ -31,26 +40,47 @@ export function TicketCheckoutForm({
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const maxQuantity = Math.min(
-    MAX_TICKETS_PER_ORDER,
-    availableSpots ?? MAX_TICKETS_PER_ORDER,
-  );
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const maxQuantity = Math.min(MAX_TICKETS_PER_ORDER, availableSpots ?? MAX_TICKETS_PER_ORDER);
   const total = (price ?? 0) * quantity;
   const inventoryError = "There are not enough tickets available.";
   const soldOut = availableSpots !== null && availableSpots < 1;
+
+  /**
+   * Clears one field's error once the user changes it.
+   * @param field The field's name, e.g. "email".
+   */
+  function clearFieldError(field: string): void {
+    setFieldErrors((current: Record<string, string>) => {
+      const next: Record<string, string> = { ...current };
+      delete next[field];
+      return next;
+    });
+  }
 
   async function startCheckout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (loading) return;
 
-    setLoading(true);
     setError("");
 
+    const parsed = checkoutSchema.safeParse({ slug, quantity, name, email });
+    if (!parsed.success) {
+      setFieldErrors(getFieldErrors(parsed.error));
+      return;
+    }
+    if (availableSpots !== null && quantity > availableSpots) {
+      setFieldErrors({ quantity: inventoryError });
+      return;
+    }
+
+    setFieldErrors({});
+    setLoading(true);
     try {
       const response = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, quantity, name, email }),
+        body: JSON.stringify(parsed.data),
       });
       const result: unknown = await response.json();
 
@@ -63,11 +93,11 @@ export function TicketCheckoutForm({
       ) {
         const message =
           typeof result === "object" &&
-          result !== null &&
-          "message" in result &&
-          typeof result.message === "string"
+            result !== null &&
+            "message" in result &&
+            typeof result.message === "string"
             ? result.message
-            : "Unable to start checkout. Please try again.";
+            : msg.unableTo("start checkout");
         throw new Error(message);
       }
 
@@ -76,14 +106,14 @@ export function TicketCheckoutForm({
       setError(
         checkoutError instanceof Error
           ? checkoutError.message
-          : "Unable to start checkout. Please try again.",
+          : msg.unableTo("start checkout"),
       );
       setLoading(false);
     }
   }
 
   return (
-    <form className="mt-8 space-y-5" onSubmit={startCheckout}>
+    <form className="mt-8 space-y-5" noValidate onSubmit={startCheckout}>
       {cancelled && (
         <p
           className="border-l-4 border-roya-sun bg-white px-4 py-3 text-roya-ink"
@@ -102,14 +132,19 @@ export function TicketCheckoutForm({
         </label>
         <input
           autoComplete="name"
-          className="w-full rounded-lg border border-roya-slate/30 px-3 py-2"
+          aria-describedby={fieldErrors.name ? "ticket-name-error" : undefined}
+          aria-invalid={Boolean(fieldErrors.name)}
+          className={fieldErrors.name ? invalidFieldClass : fieldClass}
           id="ticket-name"
-          maxLength={200}
-          minLength={2}
-          onChange={(event) => setName(event.target.value)}
+          maxLength={CUSTOMER_NAME_MAX}
+          onChange={(event) => {
+            setName(event.target.value);
+            clearFieldError("name");
+          }}
           required
           value={name}
         />
+        <FieldError id="ticket-name-error" message={fieldErrors.name} />
       </div>
 
       <div>
@@ -121,13 +156,20 @@ export function TicketCheckoutForm({
         </label>
         <input
           autoComplete="email"
-          className="w-full rounded-lg border border-roya-slate/30 px-3 py-2"
+          aria-describedby={fieldErrors.email ? "ticket-email-error" : undefined}
+          aria-invalid={Boolean(fieldErrors.email)}
+          className={fieldErrors.email ? invalidFieldClass : fieldClass}
           id="ticket-email"
-          onChange={(event) => setEmail(event.target.value)}
+          maxLength={EMAIL_MAX}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            clearFieldError("email");
+          }}
           required
           type="email"
           value={email}
         />
+        <FieldError id="ticket-email-error" message={fieldErrors.email} />
       </div>
 
       <div>
@@ -138,19 +180,21 @@ export function TicketCheckoutForm({
           Number of tickets
         </label>
         <input
-          className="w-full rounded-lg border border-roya-slate/30 px-3 py-2"
+          aria-describedby={fieldErrors.quantity ? "ticket-quantity-error" : undefined}
+          aria-invalid={Boolean(fieldErrors.quantity)}
+          className={fieldErrors.quantity ? invalidFieldClass : fieldClass}
           id="ticket-quantity"
           max={maxQuantity}
           min={1}
           onChange={(event) => {
-            const requestedQuantity = Number(event.target.value);
-            setQuantity(requestedQuantity);
-            setError(requestedQuantity > maxQuantity ? inventoryError : "");
+            setQuantity(Number(event.target.value));
+            clearFieldError("quantity");
           }}
           required
           type="number"
           value={quantity}
         />
+        <FieldError id="ticket-quantity-error" message={fieldErrors.quantity} />
       </div>
 
       <p className="flex justify-between border-t border-roya-slate/20 pt-4 text-lg font-semibold text-roya-ink">
@@ -158,11 +202,7 @@ export function TicketCheckoutForm({
         <span>{ticketPrice.format(total)}</span>
       </p>
 
-      {(error || soldOut) && (
-        <p className="text-sm text-red-700" role="alert">
-          {error || inventoryError}
-        </p>
-      )}
+      <FormError message={error || (soldOut ? inventoryError : "")} />
 
       <button
         className="w-full rounded-full bg-roya-sun px-6 py-3 font-semibold text-roya-ink hover:bg-roya-ink hover:text-white disabled:cursor-not-allowed disabled:opacity-60"

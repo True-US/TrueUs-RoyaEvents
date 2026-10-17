@@ -1,5 +1,10 @@
 import { z } from "zod";
-export const roleIdSchema = z.union([z.literal(2), z.literal(3)]);
+
+import { PERSON_NAME_MAX } from "@/features/auth/constants";
+import { optionalPhoneField, textField } from "@/lib/validation/fields";
+import { msg } from "@/lib/validation/messages";
+
+export const roleIdSchema = z.union([z.literal(2), z.literal(3)], { error: msg.invalid("Role") });
 
 export const pageRequestSchema = z.object({
   roleId: roleIdSchema,
@@ -15,14 +20,10 @@ export const updateProfileSchema = z.object({
   id: z.number().int().positive(),
   currentRoleId: roleIdSchema,
   roleId: roleIdSchema,
-  firstName: z.string().trim().min(1, "First name is required").max(100),
-  lastName: z.string().trim().min(1, "Last name is required").max(100),
-  phone: z
-    .string()
-    .trim()
-    .regex(/^\d+$/, "Phone number must contain only numbers")
-    .max(30)
-    .nullable(),
+  // Admins can save any name, so no letters-only rule here (signup keeps it).
+  firstName: textField("First name", PERSON_NAME_MAX),
+  lastName: textField("Last name", PERSON_NAME_MAX),
+  phone: optionalPhoneField(),
 });
 
 export const deactivateProfileSchema = z.object({

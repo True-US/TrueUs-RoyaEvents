@@ -14,10 +14,10 @@ type DashboardTab =
   | "Manage Bookings";
 
 const dashboardTabs: DashboardTab[] = [
-  "Manage User",
   "Manage Events",
   "Manage Schedule",
   "Manage Bookings",
+  "Manage User",
 ];
 
 export function AdminDashboard({
@@ -27,7 +27,7 @@ export function AdminDashboard({
   firstName: string;
   managedProfiles: InitialManagedProfiles;
 }) {
-  const [activeTab, setActiveTab] = useState<DashboardTab>("Manage User");
+  const [activeTab, setActiveTab] = useState<DashboardTab>("Manage Events");
 
   return (
     <section className="mx-auto max-w-6xl px-6 py-16 sm:px-10">
@@ -49,11 +49,10 @@ export function AdminDashboard({
             <button
               key={tab}
               aria-selected={activeTab === tab}
-              className={`border-b-2 px-4 py-3 text-sm font-semibold ${
-                activeTab === tab
-                  ? "border-roya-sun text-roya-ink"
-                  : "border-transparent text-roya-slate hover:text-roya-ink"
-              }`}
+              className={`border-b-2 px-4 py-3 text-sm font-semibold ${activeTab === tab
+                ? "border-roya-sun text-roya-ink"
+                : "border-transparent text-roya-slate hover:text-roya-ink"
+                }`}
               onClick={() => setActiveTab(tab)}
               role="tab"
               type="button"

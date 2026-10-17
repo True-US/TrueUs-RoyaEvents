@@ -2,7 +2,7 @@ export type SignupRequest = {
   firstName: string;
   lastName: string;
   email: string;
-  phone?: string;
+  phone?: string | null;
   password: string;
   confirmPassword: string;
 };

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import type Stripe from "stripe";
 
 import {
@@ -8,16 +7,11 @@ import {
   createTicketReservation,
   releasePendingReservation,
 } from "@/features/bookings/server/checkout";
-import { MAX_TICKETS_PER_ORDER } from "@/features/bookings/constants";
+import { checkoutSchema } from "@/features/bookings/schemas";
 import { getCurrentProfile } from "@/features/auth/current-profile";
 import { getStripeClient } from "@/lib/stripe/server";
-
-const checkoutSchema = z.object({
-  slug: z.string().trim().min(1).max(255),
-  quantity: z.number().int().min(1).max(MAX_TICKETS_PER_ORDER),
-  name: z.string().trim().min(2).max(200),
-  email: z.string().trim().email().max(255),
-});
+import { getFirstError } from "@/lib/validation/errors";
+import { msg } from "@/lib/validation/messages";
 
 export async function POST(request: Request) {
   let rawBody: unknown;
@@ -33,9 +27,7 @@ export async function POST(request: Request) {
   const parsed = checkoutSchema.safeParse(rawBody);
   if (!parsed.success) {
     return NextResponse.json(
-      {
-        message: parsed.error.issues[0]?.message ?? "Invalid checkout details.",
-      },
+      { message: getFirstError(parsed.error, msg.invalid("Checkout details")) },
       { status: 400 },
     );
   }
@@ -56,11 +48,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const buyer = {
-      profileId: profile.id,
-      name: parsed.data.name,
-      email: parsed.data.email.toLowerCase(),
-    };
+    const buyer = profile
+      ? {
+          profileId: profile.id,
+          name: parsed.data.name,
+          email: parsed.data.email,
+        }
+      : {
+          profileId: null,
+          name: parsed.data.name,
+          email: parsed.data.email,
+        };
 
     const reservation = await createTicketReservation(
       parsed.data.slug,
@@ -169,7 +167,7 @@ export async function POST(request: Request) {
 
     console.error("Create Stripe Checkout session error:", error);
     return NextResponse.json(
-      { message: "Unable to start checkout. Please try again." },
+      { message: msg.unableTo("start checkout") },
       { status: 500 },
     );
   }

@@ -8,6 +8,11 @@ import {
   type SetStateAction,
 } from "react";
 
+import { FieldError, FormError, invalidInputClass } from "@/components/ui/form-feedback";
+import { PERSON_NAME_MAX, PHONE_MAX } from "@/features/auth/constants";
+import { updateProfileSchema } from "@/features/dashboard/profile-management-schemas";
+import { getFieldErrors } from "@/lib/validation/errors";
+import { msg } from "@/lib/validation/messages";
 import {
   deactivateManagedProfile,
   loadManagedProfilePageContaining,
@@ -23,6 +28,10 @@ import {
   type ManagedProfilePage,
   type ManagedProfileRoleId,
 } from "@/features/dashboard/profile-management-types";
+
+// Same look as invalidInputClass, without the red.
+const profileInputClass: string =
+  "mt-1 w-full rounded-md border border-roya-slate/30 px-3 py-2";
 
 type ManageUsersProps = {
   initialProfiles: InitialManagedProfiles;
@@ -54,7 +63,32 @@ function ProfileTable({
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  // Errors for the edit popup. They show inside it, where the admin is looking.
+  const [dialogError, setDialogError] = useState<string>("");
+  const [dialogFieldErrors, setDialogFieldErrors] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
+
+  /**
+   * Opens or closes the edit popup, clearing the previous popup's errors.
+   * @param profile The profile to edit, or null to close.
+   */
+  function openEditor(profile: ManagedProfile | null): void {
+    setDialogError("");
+    setDialogFieldErrors({});
+    setEditingProfile(profile);
+  }
+
+  /**
+   * Clears one field's error once the admin edits it.
+   * @param field The input's name, e.g. "phone".
+   */
+  function clearDialogFieldError(field: string): void {
+    setDialogFieldErrors((current: Record<string, string>) => {
+      const next: Record<string, string> = { ...current };
+      delete next[field];
+      return next;
+    });
+  }
 
   function changePage(page: number) {
     setError(null);
@@ -65,7 +99,7 @@ function ProfileTable({
         setError(
           actionError instanceof Error
             ? actionError.message
-            : "Unable to load profiles.",
+            : msg.unableTo("load profiles"),
         );
       }
     });
@@ -76,20 +110,29 @@ function ProfileTable({
     if (!editingProfile) return;
 
     const formData = new FormData(event.currentTarget);
-    setError(null);
+    setDialogError("");
+
+    // Same rules as the server action, checked here first for fast feedback.
+    const parsed: ReturnType<typeof updateProfileSchema.safeParse> = updateProfileSchema.safeParse({
+      id: editingProfile.id,
+      currentRoleId: editingProfile.roleId,
+      roleId: Number(formData.get("roleId")),
+      firstName: String(formData.get("firstName") ?? ""),
+      lastName: String(formData.get("lastName") ?? ""),
+      phone: String(formData.get("phone") ?? ""),
+    });
+    if (!parsed.success) {
+      setDialogFieldErrors(getFieldErrors(parsed.error));
+      return;
+    }
+
+    setDialogFieldErrors({});
     startTransition(async () => {
       try {
-        const result = await updateManagedProfile({
-          id: editingProfile.id,
-          currentRoleId: editingProfile.roleId,
-          roleId: Number(formData.get("roleId")),
-          firstName: formData.get("firstName"),
-          lastName: formData.get("lastName"),
-          phone: formData.get("phone"),
-        });
+        const result = await updateManagedProfile(parsed.data);
 
         if (!result.success) {
-          setError(result.message);
+          setDialogError(result.message);
           return;
         }
 
@@ -107,10 +150,10 @@ function ProfileTable({
           }));
         }
       } catch (actionError) {
-        setError(
+        setDialogError(
           actionError instanceof Error
             ? actionError.message
-            : "Unable to save profile changes.",
+            : msg.unableTo("save the profile"),
         );
       }
     });
@@ -118,7 +161,7 @@ function ProfileTable({
 
   function deactivateProfile(profile: ManagedProfile) {
     if (
-      !window.confirm(`Deactivate ${profile.firstName} ${profile.lastName}?`)
+      !window.confirm(`Delete ${profile.firstName} ${profile.lastName}? Their profile will be deactivated.`)
     ) {
       return;
     }
@@ -140,7 +183,7 @@ function ProfileTable({
         setError(
           actionError instanceof Error
             ? actionError.message
-            : "Unable to deactivate profile.",
+            : msg.unableTo("deactivate the profile"),
         );
       }
     });
@@ -165,7 +208,7 @@ function ProfileTable({
         setError(
           actionError instanceof Error
             ? actionError.message
-            : "Unable to reactivate profile.",
+            : msg.unableTo("reactivate the profile"),
         );
       }
     });
@@ -181,16 +224,13 @@ function ProfileTable({
       </p>
 
       {error && (
-        <p
-          className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-800"
-          role="alert"
-        >
-          {error}
-        </p>
+        <div className="mt-4">
+          <FormError message={error} />
+        </div>
       )}
 
       <div className="mt-4 overflow-x-auto rounded-lg border border-roya-slate/20">
-        <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[900px] border-collapse text-left text-sm">
           <thead className="bg-roya-slate/5 text-roya-ink">
             <tr>
               <th className="px-4 py-3 font-semibold" scope="col">
@@ -201,9 +241,6 @@ function ProfileTable({
               </th>
               <th className="px-4 py-3 font-semibold" scope="col">
                 Phone
-              </th>
-              <th className="px-4 py-3 font-semibold" scope="col">
-                Created at
               </th>
               <th className="px-4 py-3 font-semibold" scope="col">
                 Last sign in
@@ -227,9 +264,6 @@ function ProfileTable({
                   {profile.phone || "—"}
                 </td>
                 <td className="px-4 py-3 text-roya-slate">
-                  {formatAuthDate(profile.createdAt)}
-                </td>
-                <td className="px-4 py-3 text-roya-slate">
                   {formatAuthDate(profile.lastSignInAt, "Never")}
                 </td>
                 <td className="px-4 py-3">
@@ -250,7 +284,7 @@ function ProfileTable({
                       disabled={isPending}
                       onClick={() => {
                         setError(null);
-                        setEditingProfile(profile);
+                        openEditor(profile);
                       }}
                       type="button"
                     >
@@ -323,6 +357,7 @@ function ProfileTable({
         >
           <form
             className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl"
+            noValidate
             onSubmit={saveProfile}
           >
             <h3
@@ -332,55 +367,87 @@ function ProfileTable({
               Edit {title.slice(0, -1)}
             </h3>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <label className="text-sm font-medium text-roya-ink">
-                First name
+              <div>
+                <label className="text-sm font-medium text-roya-ink" htmlFor="profile-first-name">
+                  First name
+                </label>
                 <input
-                  className="mt-1 w-full rounded-md border border-roya-slate/30 px-3 py-2"
+                  aria-describedby="profile-first-name-error"
+                  aria-invalid={Boolean(dialogFieldErrors.firstName)}
+                  className={dialogFieldErrors.firstName ? invalidInputClass : profileInputClass}
                   defaultValue={editingProfile.firstName}
-                  maxLength={100}
+                  id="profile-first-name"
+                  maxLength={PERSON_NAME_MAX}
                   name="firstName"
+                  onChange={() => clearDialogFieldError("firstName")}
                   required
                 />
-              </label>
-              <label className="text-sm font-medium text-roya-ink">
-                Last name
+                <FieldError id="profile-first-name-error" message={dialogFieldErrors.firstName} />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-roya-ink" htmlFor="profile-last-name">
+                  Last name
+                </label>
                 <input
-                  className="mt-1 w-full rounded-md border border-roya-slate/30 px-3 py-2"
+                  aria-describedby="profile-last-name-error"
+                  aria-invalid={Boolean(dialogFieldErrors.lastName)}
+                  className={dialogFieldErrors.lastName ? invalidInputClass : profileInputClass}
                   defaultValue={editingProfile.lastName}
-                  maxLength={100}
+                  id="profile-last-name"
+                  maxLength={PERSON_NAME_MAX}
                   name="lastName"
+                  onChange={() => clearDialogFieldError("lastName")}
                   required
                 />
-              </label>
+                <FieldError id="profile-last-name-error" message={dialogFieldErrors.lastName} />
+              </div>
 
-              <label className="text-sm font-medium text-roya-ink sm:col-span-2">
-                Role
+              <div className="sm:col-span-2">
+                <label className="text-sm font-medium text-roya-ink" htmlFor="profile-role">
+                  Role
+                </label>
                 <select
-                  className="mt-1 w-full rounded-md border border-roya-slate/30 px-3 py-2"
+                  aria-describedby="profile-role-error"
+                  aria-invalid={Boolean(dialogFieldErrors.roleId)}
+                  className={dialogFieldErrors.roleId ? invalidInputClass : profileInputClass}
                   defaultValue={editingProfile.roleId}
+                  id="profile-role"
                   name="roleId"
+                  onChange={() => clearDialogFieldError("roleId")}
                 >
                   <option value={MANAGED_PROFILE_ROLE_IDS.user}>User</option>
                   <option value={MANAGED_PROFILE_ROLE_IDS.admin}>Admin</option>
                 </select>
-              </label>
+                <FieldError id="profile-role-error" message={dialogFieldErrors.roleId} />
+              </div>
 
-              <label className="text-sm font-medium text-roya-ink sm:col-span-2">
-                Phone
+              <div className="sm:col-span-2">
+                <label className="text-sm font-medium text-roya-ink" htmlFor="profile-phone">
+                  Phone (optional)
+                </label>
                 <input
-                  className="mt-1 w-full rounded-md border border-roya-slate/30 px-3 py-2"
+                  aria-describedby="profile-phone-error"
+                  aria-invalid={Boolean(dialogFieldErrors.phone)}
+                  className={dialogFieldErrors.phone ? invalidInputClass : profileInputClass}
                   defaultValue={editingProfile.phone ?? ""}
-                  maxLength={30}
+                  id="profile-phone"
+                  maxLength={PHONE_MAX}
                   name="phone"
+                  onChange={() => clearDialogFieldError("phone")}
+                  placeholder="(780) 555-0123"
                   type="tel"
                 />
-              </label>
+                <FieldError id="profile-phone-error" message={dialogFieldErrors.phone} />
+              </div>
+            </div>
+            <div className="mt-4">
+              <FormError message={dialogError} />
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <button
                 className="rounded-md border border-roya-slate/30 px-4 py-2 text-sm font-semibold text-roya-ink hover:bg-roya-slate/5"
                 disabled={isPending}
-                onClick={() => setEditingProfile(null)}
+                onClick={() => openEditor(null)}
                 type="button"
               >
                 Cancel
