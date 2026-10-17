@@ -196,7 +196,8 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
         resetForm();
         setSuccessMessage("Event request submitted successfully.");
       } else {
-        console.error("Event request submission failed:", result);
+        // An expected rejection (validation, auth, schedule clash): show it on the form.
+        // No console.error, which would open the Next.js error overlay in dev.
         setSubmitError(result.message ?? msg.unableTo("submit your request"));
       }
     } catch (error) {
