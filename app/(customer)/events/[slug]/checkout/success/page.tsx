@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { confirmPaidReservation } from "@/features/bookings/server/checkout";
 import { prisma } from "@/lib/supabase/prisma";
 import { getStripeClient } from "@/lib/stripe/server";
 
@@ -10,7 +11,8 @@ export default async function CheckoutSuccessPage({
 }: PageProps<"/events/[slug]/checkout/success">) {
   const { slug } = await params;
   const query = await searchParams;
-  const bookingParam = typeof query.booking === "string" ? Number(query.booking) : NaN;
+  const bookingParam =
+    typeof query.booking === "string" ? Number(query.booking) : NaN;
 
   let eventTitle = "";
 
@@ -22,12 +24,18 @@ export default async function CheckoutSuccessPage({
         eventAdventure: { select: { title: true, slug: true } },
       },
     });
-    if (!booking || booking.status !== "CONFIRMED" || booking.eventAdventure.slug !== slug) {
+    if (
+      !booking ||
+      booking.status !== "CONFIRMED" ||
+      booking.eventAdventure.slug !== slug
+    ) {
       notFound();
     }
     eventTitle = booking.eventAdventure.title;
   } else if (typeof query.session_id === "string") {
-    const session = await getStripeClient().checkout.sessions.retrieve(query.session_id);
+    const session = await getStripeClient().checkout.sessions.retrieve(
+      query.session_id,
+    );
     const bookingId = Number(session.metadata?.bookingId);
     if (
       !Number.isSafeInteger(bookingId) ||
@@ -51,6 +59,17 @@ export default async function CheckoutSuccessPage({
     ) {
       notFound();
     }
+    const paymentIntentId =
+      typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : (session.payment_intent?.id ?? null);
+    await confirmPaidReservation(
+      bookingId,
+      session.id,
+      paymentIntentId,
+      session.amount_total ?? -1,
+      session.currency,
+    );
     eventTitle = booking.eventAdventure.title;
   } else {
     notFound();
@@ -65,7 +84,8 @@ export default async function CheckoutSuccessPage({
         You&apos;re going to {eventTitle}
       </h1>
       <p className="mt-5 leading-7 text-roya-slate">
-        Stripe confirmed your payment. Your ticket reservation is being finalized, and a receipt will be sent to the email address used at checkout.
+        Stripe confirmed your payment and your ticket is confirmed. A receipt
+        will be sent to the email address used at checkout.
       </p>
       <Link
         className="mt-8 inline-block rounded-full bg-roya-sun px-6 py-3 font-semibold text-roya-ink hover:bg-roya-ink hover:text-white"

@@ -31,7 +31,10 @@ export function TicketCheckoutForm({
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const maxQuantity = Math.min(MAX_TICKETS_PER_ORDER, availableSpots ?? MAX_TICKETS_PER_ORDER);
+  const maxQuantity = Math.min(
+    MAX_TICKETS_PER_ORDER,
+    availableSpots ?? MAX_TICKETS_PER_ORDER,
+  );
   const total = (price ?? 0) * quantity;
   const inventoryError = "There are not enough tickets available.";
   const soldOut = availableSpots !== null && availableSpots < 1;
@@ -42,6 +45,7 @@ export function TicketCheckoutForm({
 
     setLoading(true);
     setError("");
+
     try {
       const response = await fetch("/api/checkout", {
         method: "POST",
@@ -81,13 +85,19 @@ export function TicketCheckoutForm({
   return (
     <form className="mt-8 space-y-5" onSubmit={startCheckout}>
       {cancelled && (
-        <p className="border-l-4 border-roya-sun bg-white px-4 py-3 text-roya-ink" role="status">
+        <p
+          className="border-l-4 border-roya-sun bg-white px-4 py-3 text-roya-ink"
+          role="status"
+        >
           Checkout was cancelled. Your tickets are not paid for.
         </p>
       )}
 
       <div>
-        <label className="mb-1 block text-sm font-semibold text-roya-ink" htmlFor="ticket-name">
+        <label
+          className="mb-1 block text-sm font-semibold text-roya-ink"
+          htmlFor="ticket-name"
+        >
           Name
         </label>
         <input
@@ -103,7 +113,10 @@ export function TicketCheckoutForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-semibold text-roya-ink" htmlFor="ticket-email">
+        <label
+          className="mb-1 block text-sm font-semibold text-roya-ink"
+          htmlFor="ticket-email"
+        >
           Email for your receipt
         </label>
         <input
@@ -118,7 +131,10 @@ export function TicketCheckoutForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-semibold text-roya-ink" htmlFor="ticket-quantity">
+        <label
+          className="mb-1 block text-sm font-semibold text-roya-ink"
+          htmlFor="ticket-quantity"
+        >
           Number of tickets
         </label>
         <input
@@ -153,10 +169,15 @@ export function TicketCheckoutForm({
         disabled={loading || maxQuantity < 1}
         type="submit"
       >
-        {loading ? "Preparing checkout..." : price ? "Continue to secure payment" : "Reserve free tickets"}
+        {loading
+          ? "Preparing checkout..."
+          : price
+            ? "Continue to secure payment"
+            : "Reserve free tickets"}
       </button>
       <p className="text-sm text-roya-slate">
-        You can check out with an account or as a guest. Payments are processed securely by Stripe.
+        Sign in to your account to reserve tickets. Payments are processed
+        securely by Stripe.
       </p>
     </form>
   );

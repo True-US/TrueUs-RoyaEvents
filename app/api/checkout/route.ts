@@ -33,31 +33,34 @@ export async function POST(request: Request) {
   const parsed = checkoutSchema.safeParse(rawBody);
   if (!parsed.success) {
     return NextResponse.json(
-      { message: parsed.error.issues[0]?.message ?? "Invalid checkout details." },
+      {
+        message: parsed.error.issues[0]?.message ?? "Invalid checkout details.",
+      },
       { status: 400 },
     );
   }
 
   try {
     const profile = await getCurrentProfile();
-    if (profile && (!profile.isActive || !profile.role.isActive)) {
+    if (!profile) {
+      return NextResponse.json(
+        { message: "Please log in to continue." },
+        { status: 401 },
+      );
+    }
+
+    if (!profile.isActive || !profile.role.isActive) {
       return NextResponse.json(
         { message: "This account cannot purchase tickets." },
         { status: 403 },
       );
     }
 
-    const buyer = profile
-      ? {
-          profileId: profile.id,
-          name: parsed.data.name,
-          email: parsed.data.email.toLowerCase(),
-        }
-      : {
-          profileId: null,
-          name: parsed.data.name,
-          email: parsed.data.email.toLowerCase(),
-        };
+    const buyer = {
+      profileId: profile.id,
+      name: parsed.data.name,
+      email: parsed.data.email.toLowerCase(),
+    };
 
     const reservation = await createTicketReservation(
       parsed.data.slug,
@@ -92,7 +95,9 @@ export async function POST(request: Request) {
         appUrl.hostname !== "localhost" &&
         appUrl.hostname !== "127.0.0.1"
       ) {
-        throw new Error("NEXT_PUBLIC_APP_URL must use HTTPS outside local development.");
+        throw new Error(
+          "NEXT_PUBLIC_APP_URL must use HTTPS outside local development.",
+        );
       }
     } catch (error) {
       await releasePendingReservation(reservation.booking.id, "PAYMENT_FAILED");
@@ -135,19 +140,31 @@ export async function POST(request: Request) {
         try {
           await getStripeClient().checkout.sessions.expire(session.id);
         } catch (expireError) {
-          console.error("Could not expire abandoned Stripe Checkout session:", expireError);
+          console.error(
+            "Could not expire abandoned Stripe Checkout session:",
+            expireError,
+          );
         }
       }
       try {
-        await releasePendingReservation(reservation.booking.id, "PAYMENT_FAILED");
+        await releasePendingReservation(
+          reservation.booking.id,
+          "PAYMENT_FAILED",
+        );
       } catch (releaseError) {
-        console.error("Could not release failed ticket reservation:", releaseError);
+        console.error(
+          "Could not release failed ticket reservation:",
+          releaseError,
+        );
       }
       throw error;
     }
   } catch (error) {
     if (error instanceof CheckoutError) {
-      return NextResponse.json({ message: error.message }, { status: error.status });
+      return NextResponse.json(
+        { message: error.message },
+        { status: error.status },
+      );
     }
 
     console.error("Create Stripe Checkout session error:", error);

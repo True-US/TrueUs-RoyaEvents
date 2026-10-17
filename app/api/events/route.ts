@@ -12,6 +12,7 @@ import type {
 import {
   createEventWithLocation,
   deleteOrDeactivateEvent,
+  EventScheduleConflictError,
   reactivateEvent,
   updateEventWithLocation,
 } from "@/features/events/server/service";
@@ -124,7 +125,7 @@ export async function POST(request: Request) {
         message:
           error instanceof Error ? error.message : "Failed to create event.",
       },
-      { status: 500 },
+      { status: error instanceof EventScheduleConflictError ? 409 : 500 },
     );
   }
 }
@@ -213,7 +214,7 @@ export async function PATCH(request: Request) {
         message:
           error instanceof Error ? error.message : "Failed to update event.",
       },
-      { status: 500 },
+      { status: error instanceof EventScheduleConflictError ? 409 : 500 },
     );
   }
 }

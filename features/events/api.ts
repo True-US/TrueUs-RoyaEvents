@@ -47,9 +47,11 @@ export async function getAdminEventsRequest(): Promise<{
 }
 
 type CreateEventResponse = {
-  success: boolean;
+  success: true;
   createdLocation?: unknown;
   createdEvent?: unknown;
+} | {
+  success: false;
   message?: string;
 };
 
@@ -64,7 +66,35 @@ export async function createEventRequest(
     body: JSON.stringify(payload),
   });
 
-  return parseResponse<CreateEventResponse>(res);
+  const text = await res.text();
+  let data: unknown;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    return {
+      success: false,
+      message: `API error: ${res.status} ${res.statusText}`,
+    };
+  }
+
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "success" in data &&
+    data.success === true
+  ) {
+    return data as CreateEventResponse;
+  }
+
+  const message =
+    typeof data === "object" &&
+    data !== null &&
+    "message" in data &&
+    typeof data.message === "string"
+      ? data.message
+      : "Something went wrong while submitting the event.";
+
+  return { success: false, message };
 }
 
 export async function updateEventRequest(
@@ -113,4 +143,3 @@ export async function reactivateEventRequest(
 
   return parseResponse(res);
 }
-
