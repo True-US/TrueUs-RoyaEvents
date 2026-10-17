@@ -219,6 +219,19 @@ export async function confirmPaidReservation(
     });
 
     if (updated.count !== 1) {
+      const currentBooking = await tx.booking.findUnique({
+        where: { id: bookingId },
+        select: {
+          status: true,
+          stripeCheckoutSessionId: true,
+        },
+      });
+      if (
+        currentBooking?.status === "CONFIRMED" &&
+        currentBooking.stripeCheckoutSessionId === sessionId
+      ) {
+        return;
+      }
       throw new Error("Ticket reservation could not be confirmed.");
     }
   });
