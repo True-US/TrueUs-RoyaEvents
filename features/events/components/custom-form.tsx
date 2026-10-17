@@ -36,6 +36,7 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Minimum date/time = current local date/time
   const now = new Date();
@@ -51,6 +52,7 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
+    setSubmitError("");
 
     setFormData({
       ...formData,
@@ -144,6 +146,7 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
     }
 
     setIsSubmitting(true);
+    setSubmitError("");
     let status = "";
     if (
       kind === "contact" ||
@@ -209,12 +212,16 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
         resetForm();
         alert("Event request submitted successfully.");
       } else {
-        console.error("Event request submission failed:", result);
-        alert("Something went wrong while submitting the event.");
+        setSubmitError(
+          result.message ?? "Something went wrong while submitting the event.",
+        );
       }
     } catch (error) {
-      console.error(error);
-      alert("Something went wrong while submitting the event.");
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while submitting the event.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -279,6 +286,15 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
         onSubmit={handleSubmit}
         className="rounded-2xl border border-slate-200 bg-white p-6 shadow-lg sm:p-10"
       >
+        {submitError && (
+          <p
+            className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
+            role="alert"
+          >
+            {submitError}
+          </p>
+        )}
+
         {step === 1 && (
           <div className="space-y-6">
             <div>

@@ -9,14 +9,12 @@ import { ManageBookings } from "./manage-bookings";
 import type { InitialManagedProfiles } from "../profile-management-types";
 type DashboardTab =
   | "Manage User"
-  | "Manage Permissions"
   | "Manage Events"
   | "Manage Schedule"
   | "Manage Bookings";
 
 const dashboardTabs: DashboardTab[] = [
   "Manage User",
-  "Manage Permissions",
   "Manage Events",
   "Manage Schedule",
   "Manage Bookings",
@@ -70,8 +68,6 @@ export function AdminDashboard({
         {activeTab === "Manage User" && (
           <ManageUsers initialProfiles={managedProfiles} />
         )}
-
-        {activeTab === "Manage Permissions" && <ManagePermissions />}
 
         {activeTab === "Manage Events" && <ManageEvents />}
 
