@@ -14,7 +14,8 @@ import { revalidatePath } from "next/cache";
 import { getCurrentProfile, isAdminRole } from "@/features/auth/current-profile";
 import { EVENT_STATUS } from "@/features/events/constants";
 import { saveWithNewCover, validateCoverFile } from "@/features/events/server/cover-storage";
-import { checkEventRules } from "@/features/events/server/event-payload";
+import { checkEventPayload } from "@/features/events/server/event-payload";
+import { getSaveErrorMessage } from "@/features/events/server/save-error";
 import { createEventWithLocation, updateEventWithLocation } from "@/features/events/server/service";
 import type {
   CreateEventInput,
@@ -45,7 +46,7 @@ export async function createEventAction(formData: FormData): Promise<EventAction
     return failure("Event details are missing.");
   }
 
-  const checked: ReturnType<typeof checkEventRules> = checkEventRules(payload.event);
+  const checked: ReturnType<typeof checkEventPayload> = checkEventPayload(payload.event, payload.location);
   if (checked.error !== undefined) {
     return failure(checked.error);
   }
@@ -71,13 +72,13 @@ export async function createEventAction(formData: FormData): Promise<EventAction
       status: cover ? EVENT_STATUS.DRAFT : requestedStatus,
     };
     const created: Awaited<ReturnType<typeof createEventWithLocation>> = await createEventWithLocation({
-      ...payload,
+      location: checked.location,
       event,
     });
     eventId = created.createdEvent.id;
   } catch (error) {
     console.error("Create event error:", error);
-    return failure(errorMessage(error, "Failed to create event."));
+    return failure(getSaveErrorMessage(error, "create the event"));
   }
 
   // 2. Upload the cover and apply the requested status in the same update.
@@ -94,7 +95,9 @@ export async function createEventAction(formData: FormData): Promise<EventAction
       console.error("Create event cover error:", error);
       // The event exists, so this is still a success: the popup switches to
       // editing it, and the admin can try the cover again.
-      coverError = `The event was saved as a draft, but the cover didn't upload: ${errorMessage(error, "unknown error")}`;
+      // Admin-only screen, so the reason is shown: it is what tells them how to fix it.
+      const reason: string = error instanceof Error ? error.message : "Unknown error.";
+      coverError = `The event was saved as a draft, but the cover didn't upload. ${reason}`;
     }
   }
 
@@ -123,7 +126,7 @@ export async function updateEventAction(formData: FormData): Promise<EventAction
     return failure("Event details are missing.");
   }
 
-  const checked: ReturnType<typeof checkEventRules> = checkEventRules(payload.event);
+  const checked: ReturnType<typeof checkEventPayload> = checkEventPayload(payload.event, payload.location);
   if (checked.error !== undefined) {
     return failure(checked.error);
   }
@@ -154,16 +157,21 @@ export async function updateEventAction(formData: FormData): Promise<EventAction
     if (cover) {
       await saveWithNewCover(payload.id, cover, existing.coverImagePath, (newPath: string) =>
         updateEventWithLocation({
-          ...payload,
+          id: payload.id,
+          location: { ...checked.location, id: payload.location.id },
           event: { ...checked.event, coverImagePath: newPath },
         }),
       );
     } else {
-      await updateEventWithLocation({ ...payload, event: checked.event });
+      await updateEventWithLocation({
+        id: payload.id,
+        location: { ...checked.location, id: payload.location.id },
+        event: checked.event,
+      });
     }
   } catch (error) {
     console.error("Update event error:", error);
-    return failure(errorMessage(error, "Failed to update event."));
+    return failure(getSaveErrorMessage(error, "update the event"));
   }
 
   revalidatePath("/events", "layout");
@@ -226,14 +234,4 @@ function readCover(formData: FormData): File | null {
  */
 function failure(message: string): EventActionResult {
   return { success: false, message };
-}
-
-/**
- * Gets a readable message from a caught error.
- * @param error The caught value.
- * @param fallback Used when the error has no message.
- * @returns The message.
- */
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
 }

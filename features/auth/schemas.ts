@@ -1,22 +1,36 @@
 import { z } from "zod";
 
+import {
+  emailField,
+  nameField,
+  optionalPhoneField,
+  passwordField,
+} from "@/lib/validation/fields";
+import { msg } from "@/lib/validation/messages";
+
 export const signupSchema = z
   .object({
-    firstName: z.string().trim().min(1, "First name is required"),
-
-    lastName: z.string().trim().min(1, "Last name is required"),
-
-    email: z.string().trim().email("Please enter a valid email address"),
-
-    phone: z.string().trim().optional(),
-
-    password: z.string().min(8, "Password must be at least 8 characters"),
-
-    confirmPassword: z.string(),
+    firstName: nameField("First name"),
+    lastName: nameField("Last name"),
+    email: emailField(),
+    phone: optionalPhoneField(),
+    password: passwordField(),
+    confirmPassword: z
+      .string({ error: msg.required("Confirm password") })
+      .min(1, msg.required("Confirm password")),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
+    message: msg.passwordsMatch,
     path: ["confirmPassword"],
   });
 
-export type SignupInput = z.infer<typeof signupSchema>;
+// What the signup form sends.
+export type SignupInput = z.input<typeof signupSchema>;
+
+// Login only checks the password is there: strength rules apply when it is created.
+export const loginSchema = z.object({
+  email: emailField(),
+  password: z
+    .string({ error: msg.required("Password") })
+    .min(1, msg.required("Password")),
+});
