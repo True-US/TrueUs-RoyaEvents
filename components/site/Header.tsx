@@ -8,8 +8,8 @@ import { createClient } from "@/lib/supabase/browser";
 
 const links = [
   { href: "/adventures", label: "Adventures" },
-  { href: "/custom-event", label: "Custom event" },
   { href: "/events", label: "Events" },
+  { href: "/custom-event", label: "Custom event" },
   { href: "/tickets", label: "Tickets" },
 ];
 
