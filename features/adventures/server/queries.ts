@@ -5,6 +5,7 @@ import { cache } from "react";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { EVENT_STATUS, EVENT_TYPE } from "@/features/events/constants";
+import { keywordConditions } from "@/features/events/server/query-builders";
 import { getCoverUrl } from "@/features/events/utils/cover";
 import type { AdventureDetail, AdventureListItem } from "@/features/adventures/types";
 import { prisma } from "@/lib/supabase/prisma";
@@ -43,6 +44,21 @@ type AdventureCardRow = Prisma.EventAdventureGetPayload<{
 export async function getPublishedAdventures(): Promise<AdventureListItem[]> {
   const rows: AdventureCardRow[] = await prisma.eventAdventure.findMany({
     where: publicAdventureWhere,
+    select: adventureCardSelect,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+
+  return rows.map(toAdventureListItem);
+}
+
+/**
+ * Searches the public adventures by keyword. Matches the title only, ignoring case.
+ * @param term The trimmed search text.
+ * @returns The matching adventures as card data, newest first.
+ */
+export async function searchPublishedAdventures(term: string): Promise<AdventureListItem[]> {
+  const rows: AdventureCardRow[] = await prisma.eventAdventure.findMany({
+    where: { AND: [publicAdventureWhere, { OR: keywordConditions(term) }] },
     select: adventureCardSelect,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });

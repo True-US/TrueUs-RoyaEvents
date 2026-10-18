@@ -8,6 +8,7 @@ import { getCoverUrl } from "@/features/events/utils/cover";
 import {
   eventListOrderBy,
   eventListWhere,
+  keywordConditions,
   publicEventDetailWhere,
   visibleEventsWhere,
 } from "@/features/events/server/query-builders";
@@ -51,6 +52,21 @@ export async function getPublicEventList(params: EventListParams): Promise<Event
     where: eventListWhere(params),
     select: eventCardSelect,
     orderBy: eventListOrderBy(params.sort),
+  });
+
+  return rows.map(toEventListItem);
+}
+
+/**
+ * Searches the events the public may see by keyword. Matches the title only, ignoring case.
+ * @param term The trimmed search text.
+ * @returns The matching events as card data, soonest first.
+ */
+export async function searchPublicEvents(term: string): Promise<EventListItem[]> {
+  const rows: EventCardRow[] = await prisma.eventAdventure.findMany({
+    where: { AND: [visibleEventsWhere(new Date()), { OR: keywordConditions(term) }] },
+    select: eventCardSelect,
+    orderBy: [{ startDatetime: "asc" }, { id: "asc" }],
   });
 
   return rows.map(toEventListItem);
