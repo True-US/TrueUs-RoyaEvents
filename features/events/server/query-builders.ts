@@ -31,6 +31,16 @@ export function visibleEventsWhere(now: Date): EventWhere {
 }
 
 /**
+ * Case-insensitive "contains" conditions for a keyword search, to be used as
+ * an OR. Only the title is searched for now.
+ * @param term The trimmed search text.
+ * @returns The Prisma where conditions.
+ */
+export function keywordConditions(term: string): EventWhere[] {
+  return [{ title: { contains: term, mode: "insensitive" } }];
+}
+
+/**
  * Which event a public detail page may show: a published or cancelled event
  * (cancelled ones show a notice), active, type EVENT. Unlike the list, past
  * events are included so old shared links keep working.
