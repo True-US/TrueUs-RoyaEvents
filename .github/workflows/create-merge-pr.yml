@@ -1,0 +1,34 @@
+name: Create Merge PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Branch to merge FROM (A)"
+        required: true
+        default: "TrueUs-01"
+      target:
+        description: "Branch to merge INTO (B)"
+        required: true
+        default: "main"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE: ${{ inputs.source }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --base "$TARGET" \
+            --head "$SOURCE" \
+            --title "Merge $SOURCE into $TARGET" \
+            --body "Created manually by @${{ github.actor }}"
