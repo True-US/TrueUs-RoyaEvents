@@ -4,6 +4,7 @@ import type {
 } from "./types";
 
 import type { AdminEvent } from "./types";
+import { msg } from "@/lib/validation/messages";
 
 async function parseResponse<T>(res: Response): Promise<T> {
   const text = await res.text();
@@ -23,7 +24,7 @@ async function parseResponse<T>(res: Response): Promise<T> {
       "message" in data &&
       typeof data.message === "string"
         ? data.message
-        : "Something went wrong.";
+        : msg.unableTo("complete the request");
 
     throw new Error(message);
   }
@@ -47,9 +48,11 @@ export async function getAdminEventsRequest(): Promise<{
 }
 
 type CreateEventResponse = {
-  success: boolean;
+  success: true;
   createdLocation?: unknown;
   createdEvent?: unknown;
+} | {
+  success: false;
   message?: string;
 };
 
@@ -64,7 +67,35 @@ export async function createEventRequest(
     body: JSON.stringify(payload),
   });
 
-  return parseResponse<CreateEventResponse>(res);
+  const text = await res.text();
+  let data: unknown;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    return {
+      success: false,
+      message: `API error: ${res.status} ${res.statusText}`,
+    };
+  }
+
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "success" in data &&
+    data.success === true
+  ) {
+    return data as CreateEventResponse;
+  }
+
+  const message =
+    typeof data === "object" &&
+    data !== null &&
+    "message" in data &&
+    typeof data.message === "string"
+      ? data.message
+      : msg.unableTo("submit your request");
+
+  return { success: false, message };
 }
 
 export async function updateEventRequest(
@@ -113,4 +144,3 @@ export async function reactivateEventRequest(
 
   return parseResponse(res);
 }
-

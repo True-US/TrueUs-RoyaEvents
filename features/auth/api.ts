@@ -1,3 +1,5 @@
+import { msg } from "@/lib/validation/messages";
+
 import type { SignupRequest, SignupResponse } from "./types";
 
 export async function signup(request: SignupRequest): Promise<SignupResponse> {
@@ -14,7 +16,7 @@ export async function signup(request: SignupRequest): Promise<SignupResponse> {
   const data: SignupResponse = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Unable to create account");
+    throw new Error(data.message || msg.unableTo("create the account"));
   }
 
   return data;

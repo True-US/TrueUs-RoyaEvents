@@ -231,6 +231,7 @@ export async function getAdminEvents(): Promise<AdminEvent[]> {
     availableSpots: event.availableSpots,
     eventType: event.eventType,
     isActive: event.isActive,
+    coverUrl: getCoverUrl(event.coverImagePath),
 
     location: event.location
       ? {

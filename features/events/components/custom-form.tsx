@@ -2,13 +2,32 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { FieldError, FormError, FormSuccess } from "@/components/ui/form-feedback";
+import { EMAIL_MAX, PERSON_NAME_MAX, PHONE_MAX } from "@/features/auth/constants";
 import { createEventRequest } from "@/features/events/api";
+import {
+  EVENT_STATUS,
+  EVENT_TITLE_MAX,
+  LOCATION_ADDRESS_MAX,
+  LOCATION_CITY_MAX,
+  LOCATION_COUNTRY_MAX,
+  LOCATION_NAME_MAX,
+  LOCATION_POSTAL_CODE_MAX,
+  LOCATION_PROVINCE_MAX,
+  REQUEST_GUESTS_MAX,
+  REQUEST_MESSAGE_MAX,
+} from "@/features/events/constants";
 import {
   customEventStep1Schema,
   customEventStep2Schema,
   customEventStep3Schema,
 } from "@/features/events/schemas";
 import type { CreateEventWithLocationInput } from "@/features/events/types";
+import { dateToZonedInput, zonedInputToDate } from "@/features/events/utils/dates";
+import { makeSlug } from "@/features/events/utils/slug";
+import { getFieldErrors } from "@/lib/validation/errors";
+import { msg } from "@/lib/validation/messages";
+
 type CustomEventFormProps = {
   kind: string;
   submitLabel: string;
@@ -21,8 +40,8 @@ const initialFormData = {
   title: "",
   startDate: "",
   endDate: "",
-  capacity: "",
   numberOfGuests: "",
+  message: "",
   location: "",
   address: "",
   city: "",
@@ -37,10 +56,10 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Minimum date/time = current local date/time
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  const minDateTime = now.toISOString().slice(0, 16);
+  const [submitError, setSubmitError] = useState<string>("");
+  const [successMessage, setSuccessMessage] = useState<string>("");
+  // The form's dates are Edmonton time, so the earliest pick is "now" in Edmonton.
+  const minDateTime: string = dateToZonedInput(new Date());
 
   const resetForm = () => {
     setFormData(initialFormData);
@@ -51,6 +70,8 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
+    setSubmitError("");
+    setSuccessMessage("");
 
     setFormData({
       ...formData,
@@ -75,17 +96,7 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
     const result = schema.safeParse(formData);
 
     if (!result.success) {
-      const nextErrors: Record<string, string> = {};
-
-      result.error.issues.forEach((issue) => {
-        const fieldName = issue.path[0]?.toString();
-
-        if (fieldName) {
-          nextErrors[fieldName] = issue.message;
-        }
-      });
-
-      setErrors(nextErrors);
+      setErrors(getFieldErrors(result.error));
       return false;
     }
 
@@ -124,56 +135,28 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
       return;
     }
 
-    const isValid =
-      customEventStep1Schema.safeParse(formData).success &&
-      customEventStep2Schema.safeParse(formData).success &&
-      customEventStep3Schema.safeParse(formData).success;
+    setSubmitError("");
 
-    if (!isValid) {
-      const combined = {
-        ...customEventStep1Schema.safeParse(formData).error?.flatten()
-          .fieldErrors,
-        ...customEventStep2Schema.safeParse(formData).error?.flatten()
-          .fieldErrors,
-        ...customEventStep3Schema.safeParse(formData).error?.flatten()
-          .fieldErrors,
-      };
-
-      setErrors(combined as Record<string, string>);
-      return;
+    // Check every step again; if one fails, go back to the first step with an error.
+    const stepSchemas = [customEventStep1Schema, customEventStep2Schema, customEventStep3Schema];
+    for (let index = 0; index < stepSchemas.length; index++) {
+      const checked = stepSchemas[index].safeParse(formData);
+      if (!checked.success) {
+        setErrors(getFieldErrors(checked.error));
+        setStep(index + 1);
+        return;
+      }
     }
 
     setIsSubmitting(true);
-    let status = "";
-    if (
-      kind === "contact" ||
-      kind === "private_adventure" ||
-      kind === "custom_event"
-    ) {
-      status = "DRAFT";
-    } else {
-      status = "PUBLISHED";
-    }
-    const requiredFields = [
-      formData.firstName,
-      formData.lastName,
-      formData.email,
-      formData.phone,
-      formData.title,
-      formData.startDate,
-      formData.endDate,
-      formData.numberOfGuests,
-      formData.location,
-      formData.address,
-      formData.city,
-      formData.province,
-      formData.postalCode,
-      formData.country,
-    ];
+    // Every request lands as a draft. The server enforces this too.
+    const status: string = EVENT_STATUS.DRAFT;
+    const start: Date | null = zonedInputToDate(formData.startDate);
+    const end: Date | null = zonedInputToDate(formData.endDate);
 
     try {
-      if (requiredFields.some((value) => !value.trim())) {
-        alert("Please complete every required field before submitting.");
+      if (!start || !end) {
+        setSubmitError(msg.invalid("Start and end dates"));
         return;
       }
 
@@ -188,11 +171,16 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
         },
         event: {
           title: formData.title,
-          slug: formData.title.toLowerCase().trim().replace(/\s+/g, "-"),
+          slug: makeSlug(formData.title, true),
           shortDescription: formData.title,
-          description: `${formData.firstName} ${formData.lastName} — ${formData.email} — ${formData.phone}`,
-          startDatetime: formData.startDate,
-          endDatetime: formData.endDate,
+          description: [
+            `${formData.firstName} ${formData.lastName} — ${formData.email} — ${formData.phone}`,
+            formData.message.trim(),
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+          startDatetime: start.toISOString(),
+          endDatetime: end.toISOString(),
           capacity: Number(formData.numberOfGuests),
           availableSpots: Number(formData.numberOfGuests),
           eventType: kind,
@@ -205,16 +193,17 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
 
       const result = await createEventRequest(payload);
       if (result.success) {
-        console.log("Created:", result);
         resetForm();
-        alert("Event request submitted successfully.");
+        setSuccessMessage("Event request submitted successfully.");
       } else {
-        console.error("Event request submission failed:", result);
-        alert("Something went wrong while submitting the event.");
+        // An expected rejection (validation, auth, schedule clash): show it on the form.
+        // No console.error, which would open the Next.js error overlay in dev.
+        setSubmitError(result.message ?? msg.unableTo("submit your request"));
       }
     } catch (error) {
       console.error(error);
-      alert("Something went wrong while submitting the event.");
+      // parseResponse throws the server's message for a rejected request.
+      setSubmitError(error instanceof Error ? error.message : msg.unableTo("submit your request"));
     } finally {
       setIsSubmitting(false);
     }
@@ -245,11 +234,10 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
               className="flex flex-1 items-center last:flex-none"
             >
               <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-all duration-300 ${
-                  step >= number
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-all duration-300 ${step >= number
                     ? "bg-slate-900 text-white shadow-md"
                     : "bg-slate-100 text-slate-400"
-                }`}
+                  }`}
               >
                 {step > number ? "✓" : number}
               </div>
@@ -257,9 +245,8 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
               {number < 4 && (
                 <div className="mx-3 h-1 flex-1 overflow-hidden rounded-full bg-slate-100">
                   <div
-                    className={`h-full rounded-full bg-slate-900 transition-all duration-500 ${
-                      step > number ? "w-full" : "w-0"
-                    }`}
+                    className={`h-full rounded-full bg-slate-900 transition-all duration-500 ${step > number ? "w-full" : "w-0"
+                      }`}
                   />
                 </div>
               )}
@@ -276,9 +263,16 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
       </div>
 
       <form
+        noValidate
         onSubmit={handleSubmit}
         className="rounded-2xl border border-slate-200 bg-white p-6 shadow-lg sm:p-10"
       >
+        {successMessage && (
+          <div className="mb-6">
+            <FormSuccess message={successMessage} />
+          </div>
+        )}
+
         {step === 1 && (
           <div className="space-y-6">
             <div>
@@ -295,100 +289,98 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
 
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
+                <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="firstName">
                   First Name
                 </label>
 
                 <input
+                  id="firstName"
                   name="firstName"
+                  maxLength={PERSON_NAME_MAX}
                   value={formData.firstName}
                   onChange={updateField}
                   placeholder="John"
                   required
                   aria-invalid={Boolean(errors.firstName)}
-                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                    errors.firstName
+                  aria-describedby={errors.firstName ? "firstName-error" : undefined}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.firstName
                       ? "border-red-500 focus:border-red-500"
                       : "border-slate-300 focus:border-slate-900"
-                  }`}
+                    }`}
                 />
-                {errors.firstName && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors.firstName}
-                  </p>
-                )}
+                <FieldError id="firstName-error" message={errors.firstName} />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
+                <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="lastName">
                   Last Name
                 </label>
 
                 <input
+                  id="lastName"
                   name="lastName"
+                  maxLength={PERSON_NAME_MAX}
                   value={formData.lastName}
                   onChange={updateField}
                   placeholder="Smith"
                   required
                   aria-invalid={Boolean(errors.lastName)}
-                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                    errors.lastName
+                  aria-describedby={errors.lastName ? "lastName-error" : undefined}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.lastName
                       ? "border-red-500 focus:border-red-500"
                       : "border-slate-300 focus:border-slate-900"
-                  }`}
+                    }`}
                 />
-                {errors.lastName && (
-                  <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>
-                )}
+                <FieldError id="lastName-error" message={errors.lastName} />
               </div>
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+              <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="email">
                 Email Address
               </label>
 
               <input
                 type="email"
+                id="email"
                 name="email"
+                maxLength={EMAIL_MAX}
                 value={formData.email}
                 onChange={updateField}
                 placeholder="john@example.com"
                 required
                 aria-invalid={Boolean(errors.email)}
-                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                  errors.email
+                aria-describedby={errors.email ? "email-error" : undefined}
+                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.email
                     ? "border-red-500 focus:border-red-500"
                     : "border-slate-300 focus:border-slate-900"
-                }`}
+                  }`}
               />
-              {errors.email && (
-                <p className="mt-1 text-sm text-red-600">{errors.email}</p>
-              )}
+              <FieldError id="email-error" message={errors.email} />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+              <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="phone">
                 Phone Number
               </label>
 
               <input
                 type="tel"
+                id="phone"
                 name="phone"
+                maxLength={PHONE_MAX}
                 value={formData.phone}
                 onChange={updateField}
                 placeholder="(780) 555-0123"
                 required
                 aria-invalid={Boolean(errors.phone)}
-                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                  errors.phone
+                aria-describedby={errors.phone ? "phone-error" : undefined}
+                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.phone
                     ? "border-red-500 focus:border-red-500"
                     : "border-slate-300 focus:border-slate-900"
-                }`}
+                  }`}
               />
-              {errors.phone && (
-                <p className="mt-1 text-sm text-red-600">{errors.phone}</p>
-              )}
+              <FieldError id="phone-error" message={errors.phone} />
             </div>
 
             <div className="flex justify-end pt-4">
@@ -418,105 +410,125 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+              <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="title">
                 Event Name
               </label>
 
               <input
+                id="title"
                 name="title"
+                maxLength={EVENT_TITLE_MAX}
                 value={formData.title}
                 onChange={updateField}
                 placeholder="John's Birthday Party"
                 required
                 aria-invalid={Boolean(errors.title)}
-                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                  errors.title
+                aria-describedby={errors.title ? "title-error" : undefined}
+                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.title
                     ? "border-red-500 focus:border-red-500"
                     : "border-slate-300 focus:border-slate-900"
-                }`}
+                  }`}
               />
-              {errors.title && (
-                <p className="mt-1 text-sm text-red-600">{errors.title}</p>
-              )}
+              <FieldError id="title-error" message={errors.title} />
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
+                <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="startDate">
                   Start Date
                 </label>
 
                 <input
                   type="datetime-local"
+                  id="startDate"
                   name="startDate"
                   value={formData.startDate}
                   onChange={updateField}
                   min={minDateTime}
                   required
                   aria-invalid={Boolean(errors.startDate)}
-                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                    errors.startDate
+                  aria-describedby={errors.startDate ? "startDate-error" : undefined}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.startDate
                       ? "border-red-500 focus:border-red-500"
                       : "border-slate-300 focus:border-slate-900"
-                  }`}
+                    }`}
                 />
-                {errors.startDate && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors.startDate}
-                  </p>
-                )}
+                <FieldError id="startDate-error" message={errors.startDate} />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
+                <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="endDate">
                   End Date
                 </label>
 
                 <input
                   type="datetime-local"
+                  id="endDate"
                   name="endDate"
                   value={formData.endDate}
                   onChange={updateField}
                   min={formData.startDate || minDateTime}
                   required
                   aria-invalid={Boolean(errors.endDate)}
-                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                    errors.endDate
+                  aria-describedby={errors.endDate ? "endDate-error" : undefined}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.endDate
                       ? "border-red-500 focus:border-red-500"
                       : "border-slate-300 focus:border-slate-900"
-                  }`}
+                    }`}
                 />
-                {errors.endDate && (
-                  <p className="mt-1 text-sm text-red-600">{errors.endDate}</p>
-                )}
+                <FieldError id="endDate-error" message={errors.endDate} />
               </div>
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+              <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="numberOfGuests">
                 Number of Guests
               </label>
 
               <input
                 type="number"
+                id="numberOfGuests"
                 name="numberOfGuests"
                 value={formData.numberOfGuests}
                 onChange={updateField}
                 placeholder="20"
                 min="1"
+                max={REQUEST_GUESTS_MAX}
                 required
                 aria-invalid={Boolean(errors.numberOfGuests)}
-                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                  errors.numberOfGuests
+                aria-describedby={errors.numberOfGuests ? "numberOfGuests-error" : undefined}
+                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.numberOfGuests
                     ? "border-red-500 focus:border-red-500"
                     : "border-slate-300 focus:border-slate-900"
-                }`}
+                  }`}
               />
-              {errors.numberOfGuests && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors.numberOfGuests}
-                </p>
-              )}
+              <FieldError id="numberOfGuests-error" message={errors.numberOfGuests} />
+            </div>
+
+            <div>
+              <label
+                className="mb-2 block text-sm font-medium text-slate-700"
+                htmlFor="message"
+              >
+                Message (optional)
+              </label>
+
+              <textarea
+                id="message"
+                name="message"
+                value={formData.message}
+                onChange={updateField}
+                maxLength={REQUEST_MESSAGE_MAX}
+                rows={4}
+                placeholder="Tell us about your preferred date, group, and requirements."
+                aria-invalid={Boolean(errors.message)}
+                aria-describedby={errors.message ? "message-error" : undefined}
+                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.message
+                    ? "border-red-500 focus:border-red-500"
+                    : "border-slate-300 focus:border-slate-900"
+                  }`}
+              />
+              <FieldError id="message-error" message={errors.message} />
             </div>
 
             <div className="flex items-center justify-between pt-4">
@@ -554,140 +566,138 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+              <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="location">
                 Location
               </label>
               <input
+                id="location"
                 name="location"
+                maxLength={LOCATION_NAME_MAX}
                 value={formData.location}
                 onChange={updateField}
                 placeholder="Roya Event & Adventure Center"
                 required
                 aria-invalid={Boolean(errors.location)}
-                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                  errors.location
+                aria-describedby={errors.location ? "location-error" : undefined}
+                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.location
                     ? "border-red-500 focus:border-red-500"
                     : "border-slate-300 focus:border-slate-900"
-                }`}
+                  }`}
               />
-              {errors.location && (
-                <p className="mt-1 text-sm text-red-600">{errors.location}</p>
-              )}
+              <FieldError id="location-error" message={errors.location} />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+              <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="address">
                 Address
               </label>
               <input
+                id="address"
                 name="address"
+                maxLength={LOCATION_ADDRESS_MAX}
                 value={formData.address}
                 onChange={updateField}
                 placeholder="123 Main St 12Ave"
                 required
                 aria-invalid={Boolean(errors.address)}
-                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                  errors.address
+                aria-describedby={errors.address ? "address-error" : undefined}
+                className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.address
                     ? "border-red-500 focus:border-red-500"
                     : "border-slate-300 focus:border-slate-900"
-                }`}
+                  }`}
               />
-              {errors.address && (
-                <p className="mt-1 text-sm text-red-600">{errors.address}</p>
-              )}
+              <FieldError id="address-error" message={errors.address} />
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
+                <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="city">
                   City
                 </label>
                 <input
+                  id="city"
                   name="city"
+                  maxLength={LOCATION_CITY_MAX}
                   value={formData.city}
                   onChange={updateField}
                   placeholder="Edmonton"
                   required
                   aria-invalid={Boolean(errors.city)}
-                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                    errors.city
+                  aria-describedby={errors.city ? "city-error" : undefined}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.city
                       ? "border-red-500 focus:border-red-500"
                       : "border-slate-300 focus:border-slate-900"
-                  }`}
+                    }`}
                 />
-                {errors.city && (
-                  <p className="mt-1 text-sm text-red-600">{errors.city}</p>
-                )}
+                <FieldError id="city-error" message={errors.city} />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
+                <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="province">
                   Province
                 </label>
                 <input
+                  id="province"
                   name="province"
+                  maxLength={LOCATION_PROVINCE_MAX}
                   value={formData.province}
                   onChange={updateField}
                   placeholder="Alberta"
                   required
                   aria-invalid={Boolean(errors.province)}
-                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                    errors.province
+                  aria-describedby={errors.province ? "province-error" : undefined}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.province
                       ? "border-red-500 focus:border-red-500"
                       : "border-slate-300 focus:border-slate-900"
-                  }`}
+                    }`}
                 />
-                {errors.province && (
-                  <p className="mt-1 text-sm text-red-600">{errors.province}</p>
-                )}
+                <FieldError id="province-error" message={errors.province} />
               </div>
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
+                <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="postalCode">
                   Postal Code
                 </label>
                 <input
+                  id="postalCode"
                   name="postalCode"
+                  maxLength={LOCATION_POSTAL_CODE_MAX}
                   value={formData.postalCode}
                   onChange={updateField}
                   placeholder="T6G 2T6"
                   required
                   aria-invalid={Boolean(errors.postalCode)}
-                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                    errors.postalCode
+                  aria-describedby={errors.postalCode ? "postalCode-error" : undefined}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.postalCode
                       ? "border-red-500 focus:border-red-500"
                       : "border-slate-300 focus:border-slate-900"
-                  }`}
+                    }`}
                 />
-                {errors.postalCode && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors.postalCode}
-                  </p>
-                )}
+                <FieldError id="postalCode-error" message={errors.postalCode} />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
+                <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="country">
                   Country
                 </label>
                 <input
+                  id="country"
                   name="country"
+                  maxLength={LOCATION_COUNTRY_MAX}
                   value={formData.country}
                   onChange={updateField}
                   placeholder="Canada"
                   required
                   aria-invalid={Boolean(errors.country)}
-                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${
-                    errors.country
+                  aria-describedby={errors.country ? "country-error" : undefined}
+                  className={`w-full rounded-xl border px-4 py-3 outline-none transition focus:ring-2 focus:ring-slate-900/10 ${errors.country
                       ? "border-red-500 focus:border-red-500"
                       : "border-slate-300 focus:border-slate-900"
-                  }`}
+                    }`}
                 />
-                {errors.country && (
-                  <p className="mt-1 text-sm text-red-600">{errors.country}</p>
-                )}
+                <FieldError id="country-error" message={errors.country} />
               </div>
             </div>
 
@@ -783,6 +793,8 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
               </div>
             </div>
 
+            <FormError message={submitError} />
+
             <div className="flex items-center justify-between pt-4">
               <button
                 type="button"
@@ -796,9 +808,8 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
                 type="submit"
                 disabled={isSubmitting}
                 aria-busy={isSubmitting}
-                className={`rounded-xl bg-amber-500 px-7 py-3 font-semibold text-slate-950 shadow-sm transition hover:bg-amber-400 ${
-                  isSubmitting ? "cursor-not-allowed opacity-70" : ""
-                }`}
+                className={`rounded-xl bg-amber-500 px-7 py-3 font-semibold text-slate-950 shadow-sm transition hover:bg-amber-400 ${isSubmitting ? "cursor-not-allowed opacity-70" : ""
+                  }`}
               >
                 {isSubmitting ? "Submitting..." : submitLabel}
               </button>

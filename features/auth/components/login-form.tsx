@@ -1,10 +1,31 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/browser";
+import { FieldError, FormError } from "@/components/ui/form-feedback";
 import { checkActiveProfileForLogin } from "@/features/auth/actions";
+import { EMAIL_MAX, PASSWORD_MAX } from "@/features/auth/constants";
+import { loginSchema } from "@/features/auth/schemas";
+import { getFieldErrors } from "@/lib/validation/errors";
+import { msg } from "@/lib/validation/messages";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
+
+/**
+ * Turns a Supabase sign-in error into our own wording.
+ * @param code The error's code, e.g. "invalid_credentials".
+ * @returns The message to show.
+ */
+function getSignInErrorMessage(code: string | undefined): string {
+  if (code === "invalid_credentials") {
+    return "Email or password is incorrect.";
+  }
+  if (code === "email_not_confirmed") {
+    return "Confirm your email before logging in.";
+  }
+
+  return msg.unableTo("log in");
+}
 
 export function LoginForm() {
   const router = useRouter();
@@ -14,6 +35,7 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Check if user is already logged in
   useEffect(() => {
@@ -39,11 +61,8 @@ export function LoginForm() {
         }
       } catch (authError) {
         await supabase.auth.signOut();
-        setError(
-          authError instanceof Error
-            ? authError.message
-            : "Unable to verify account status. Please try again.",
-        );
+        console.error("Login: could not verify account status:", authError);
+        setError(msg.unableTo("verify your account"));
       } finally {
         setCheckingAuth(false);
       }
@@ -57,31 +76,32 @@ export function LoginForm() {
 
     if (loading) return;
 
-    const trimmedEmail = email.trim().toLowerCase();
+    setError("");
 
-    if (!trimmedEmail || !password.trim()) {
-      setError("Please enter both email and password.");
+    const parsed: ReturnType<typeof loginSchema.safeParse> = loginSchema.safeParse({ email, password });
+    if (!parsed.success) {
+      setFieldErrors(getFieldErrors(parsed.error));
       return;
     }
 
+    setFieldErrors({});
     setLoading(true);
-    setError("");
     const supabase = createClient();
 
     try {
       const { data, error: signInError } =
         await supabase.auth.signInWithPassword({
-          email: trimmedEmail,
-          password,
+          email: parsed.data.email,
+          password: parsed.data.password,
         });
 
       if (signInError) {
-        setError(signInError.message);
+        setError(getSignInErrorMessage(signInError.code));
         return;
       }
 
       if (!data.user) {
-        setError("Unable to log in. Please try again.");
+        setError(msg.unableTo("log in"));
         return;
       }
 
@@ -97,7 +117,8 @@ export function LoginForm() {
       router.refresh();
     } catch (err) {
       await supabase.auth.signOut();
-      setError(err instanceof Error ? err.message : "Unable to log in.");
+      console.error("Login error:", err);
+      setError(msg.unableTo("log in"));
     } finally {
       setLoading(false);
     }
@@ -116,7 +137,7 @@ export function LoginForm() {
       <div className="w-full rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
         <h1 className="mb-6 text-3xl font-bold text-slate-900">Login</h1>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form className="space-y-4" noValidate onSubmit={handleSubmit}>
           <div>
             <label
               className="mb-1 block text-sm font-medium text-slate-700"
@@ -128,12 +149,20 @@ export function LoginForm() {
             <input
               className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500"
               id="email"
-              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="email"
+              maxLength={EMAIL_MAX}
+              aria-invalid={Boolean(fieldErrors.email)}
+              aria-describedby={fieldErrors.email ? "email-error" : undefined}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setFieldErrors((current) => ({ ...current, email: "" }));
+              }}
               placeholder="you@example.com"
               type="email"
               value={email}
               required
             />
+            <FieldError id="email-error" message={fieldErrors.email} />
           </div>
 
           <div>
@@ -147,19 +176,23 @@ export function LoginForm() {
             <input
               className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500"
               id="password"
-              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+              maxLength={PASSWORD_MAX}
+              aria-invalid={Boolean(fieldErrors.password)}
+              aria-describedby={fieldErrors.password ? "password-error" : undefined}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setFieldErrors((current) => ({ ...current, password: "" }));
+              }}
               placeholder="••••••••"
               type="password"
               value={password}
               required
             />
+            <FieldError id="password-error" message={fieldErrors.password} />
           </div>
 
-          {error ? (
-            <p className="text-sm text-red-600" role="alert">
-              {error}
-            </p>
-          ) : null}
+          <FormError message={error} />
 
           <button
             className="w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"

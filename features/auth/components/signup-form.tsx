@@ -4,60 +4,91 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { FieldError, FormError } from "@/components/ui/form-feedback";
+import { EMAIL_MAX, PASSWORD_MAX, PERSON_NAME_MAX, PHONE_MAX } from "@/features/auth/constants";
+import { signupSchema, type SignupInput } from "@/features/auth/schemas";
+import { getFieldErrors } from "@/lib/validation/errors";
+import { msg } from "@/lib/validation/messages";
+
 import { signup } from "../api";
+
+const initialValues: SignupInput = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  password: "",
+  confirmPassword: "",
+};
+
+const inputClass: string = "w-full rounded-md border px-3 py-2";
+const invalidClass: string = "w-full rounded-md border border-red-500 px-3 py-2";
 
 export function SignupForm() {
   const router = useRouter();
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [values, setValues] = useState<SignupInput>(initialValues);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
 
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
+  /**
+   * Updates one field and clears its error.
+   * @param name The field's name in the form values.
+   * @param value The new text.
+   */
+  function updateField(name: keyof SignupInput, value: string): void {
+    setValues((current: SignupInput) => ({ ...current, [name]: value }));
+    setFieldErrors((current: Record<string, string>) => {
+      const next: Record<string, string> = { ...current };
+      delete next[name];
+      return next;
+    });
+  }
 
-  function resetForm() {
-    setFirstName("");
-    setLastName("");
-    setEmail("");
-    setPhone("");
-    setPassword("");
-    setConfirmPassword("");
-    setError("");
-    setMessage("");
+  /**
+   * Props shared by every input: the error styling and its aria link.
+   * @param name The field's name in the form values.
+   * @returns The className and aria attributes.
+   */
+  function fieldProps(name: keyof SignupInput) {
+    return {
+      className: fieldErrors[name] ? invalidClass : inputClass,
+      "aria-invalid": Boolean(fieldErrors[name]),
+      "aria-describedby": fieldErrors[name] ? `${name}-error` : undefined,
+    };
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (loading) return;
+    if (loading) {
+      return;
+    }
 
     setError("");
-    setMessage("");
+
+    const parsed: ReturnType<typeof signupSchema.safeParse> = signupSchema.safeParse(values);
+    if (!parsed.success) {
+      setFieldErrors(getFieldErrors(parsed.error));
+      setError(msg.fixFields);
+      return;
+    }
+
+    setFieldErrors({});
     setLoading(true);
 
     try {
-      const result = await signup({
-        firstName,
-        lastName,
-        email,
-        phone,
-        password,
-        confirmPassword,
-      });
+      await signup(values);
 
       // Account created successfully
-      resetForm();
+      setValues(initialValues);
 
       // Redirect to login page
       router.replace("/login");
     } catch (error) {
       setError(
-        error instanceof Error ? error.message : "Unable to create account.",
+        error instanceof Error ? error.message : msg.unableTo("create the account"),
       );
     } finally {
       setLoading(false);
@@ -72,7 +103,7 @@ export function SignupForm() {
         <p className="mt-2 text-gray-600">Join Roya Events & Adventures</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form noValidate onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label
@@ -85,11 +116,14 @@ export function SignupForm() {
             <input
               id="firstName"
               type="text"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              className="w-full rounded-md border px-3 py-2"
+              autoComplete="given-name"
+              maxLength={PERSON_NAME_MAX}
+              value={values.firstName}
+              onChange={(e) => updateField("firstName", e.target.value)}
               required
+              {...fieldProps("firstName")}
             />
+            <FieldError id="firstName-error" message={fieldErrors.firstName} />
           </div>
 
           <div>
@@ -103,11 +137,14 @@ export function SignupForm() {
             <input
               id="lastName"
               type="text"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              className="w-full rounded-md border px-3 py-2"
+              autoComplete="family-name"
+              maxLength={PERSON_NAME_MAX}
+              value={values.lastName}
+              onChange={(e) => updateField("lastName", e.target.value)}
               required
+              {...fieldProps("lastName")}
             />
+            <FieldError id="lastName-error" message={fieldErrors.lastName} />
           </div>
         </div>
 
@@ -119,25 +156,32 @@ export function SignupForm() {
           <input
             id="email"
             type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border px-3 py-2"
+            autoComplete="email"
+            maxLength={EMAIL_MAX}
+            value={values.email}
+            onChange={(e) => updateField("email", e.target.value)}
             required
+            {...fieldProps("email")}
           />
+          <FieldError id="email-error" message={fieldErrors.email} />
         </div>
 
         <div>
           <label htmlFor="phone" className="mb-1 block text-sm font-medium">
-            Phone
+            Phone (optional)
           </label>
 
           <input
             id="phone"
             type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="w-full rounded-md border px-3 py-2"
+            autoComplete="tel"
+            maxLength={PHONE_MAX}
+            placeholder="(780) 555-0123"
+            value={values.phone ?? ""}
+            onChange={(e) => updateField("phone", e.target.value)}
+            {...fieldProps("phone")}
           />
+          <FieldError id="phone-error" message={fieldErrors.phone} />
         </div>
 
         <div>
@@ -148,11 +192,14 @@ export function SignupForm() {
           <input
             id="password"
             type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border px-3 py-2"
+            autoComplete="new-password"
+            maxLength={PASSWORD_MAX}
+            value={values.password}
+            onChange={(e) => updateField("password", e.target.value)}
             required
+            {...fieldProps("password")}
           />
+          <FieldError id="password-error" message={fieldErrors.password} />
         </div>
 
         <div>
@@ -166,16 +213,17 @@ export function SignupForm() {
           <input
             id="confirmPassword"
             type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="w-full rounded-md border px-3 py-2"
+            autoComplete="new-password"
+            maxLength={PASSWORD_MAX}
+            value={values.confirmPassword}
+            onChange={(e) => updateField("confirmPassword", e.target.value)}
             required
+            {...fieldProps("confirmPassword")}
           />
+          <FieldError id="confirmPassword-error" message={fieldErrors.confirmPassword} />
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
-
-        {message && <p className="text-sm text-green-700">{message}</p>}
+        <FormError message={error} />
 
         <button
           type="submit"

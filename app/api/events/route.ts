@@ -5,51 +5,22 @@ import {
   isAdminRole,
 } from "@/features/auth/current-profile";
 
-
 import type {
-  CreateEventInput,
   CreateEventWithLocationInput,
   UpdateEventWithLocationInput,
 } from "@/features/events/types";
-import { createEventWithLocation, deleteOrDeactivateEvent, reactivateEvent, updateEventWithLocation } from "@/features/events/server/service";
+import {
+  createEventWithLocation,
+  deleteOrDeactivateEvent,
+  EventScheduleConflictError,
+  reactivateEvent,
+  updateEventWithLocation,
+} from "@/features/events/server/service";
 import { getAdminEvents } from "@/features/events/server/queries";
-import { validateEventRules } from "@/features/events/schemas";
-
-/**
- * Checks that a date string ends with a zone: "Z" or an offset like "-06:00".
- * @param value The date string from the payload.
- * @returns True when the moment it describes is unambiguous.
- */
-function hasTimeZone(value: string): boolean {
-  return /(Z|[+-]\d{2}:\d{2})$/.test(value);
-}
-
-/**
- * Applies the event business rules (price, spots, dates) to a payload's event.
- * The form checks the same rules, but the server must not trust the browser.
- * @param event The event part of a create/update payload.
- * @returns The event with its price normalized (0 -> null), or an error message.
- */
-function checkEventRules(
-  event: CreateEventInput | undefined,
-): { event: CreateEventInput; error?: never } | { event?: never; error: string } {
-  if (!event) {
-    return { error: "Event details are missing." };
-  }
-
-  // Times must name their zone ("...Z" or "...-06:00"). A bare "2026-10-10T19:00"
-  // would be read in the server's zone, which is UTC on Vercel.
-  if (!hasTimeZone(event.startDatetime) || (event.endDatetime && !hasTimeZone(event.endDatetime))) {
-    return { error: "Dates must include a time zone (ISO 8601, e.g. 2026-10-11T01:00:00.000Z)." };
-  }
-
-  const result: ReturnType<typeof validateEventRules> = validateEventRules(event);
-  if (result.error !== undefined) {
-    return { error: result.error };
-  }
-
-  return { event: { ...event, price: result.data.price } };
-}
+// Same checks as the admin server actions (features/events/server/actions.ts).
+import { checkEventPayload, toPublicRequestEvent } from "@/features/events/server/event-payload";
+import { getSaveErrorMessage } from "@/features/events/server/save-error";
+import { msg } from "@/lib/validation/messages";
 
 async function requireAdmin() {
   const profile = await getCurrentProfile();
@@ -69,7 +40,7 @@ async function requireAdmin() {
   return profile;
 }
 
-/** 
+/**
  * GET
  *
  * Used by Admin Manage Events.
@@ -100,13 +71,12 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to load events.",
+        message: msg.unableTo("load events"),
       },
       { status: 500 },
     );
   }
 }
-
 
 /**
  * POST
@@ -114,23 +84,38 @@ export async function GET() {
  * Creates an event.
  */
 export async function POST(request: Request) {
+  let payload: CreateEventWithLocationInput;
   try {
-    const profile = await requireAdmin();
+    payload = await request.json();
+  } catch {
+    return NextResponse.json(
+      { success: false, message: "Request body must be valid JSON." },
+      { status: 400 },
+    );
+  }
 
-    if (!profile) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Unauthorized.",
-        },
-        { status: 401 },
-      );
+  try {
+    // Only the public "custom event" request may skip the admin check. Its
+    // event is limited below, so it can never be published or priced.
+    const isPublicRequest: boolean = payload?.event?.eventType === "custom_event";
+    if (!isPublicRequest) {
+      const profile = await requireAdmin();
+
+      if (!profile) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Unauthorized.",
+          },
+          { status: 401 },
+        );
+      }
     }
 
-    const payload: CreateEventWithLocationInput =
-      await request.json();
-
-    const checked: ReturnType<typeof checkEventRules> = checkEventRules(payload?.event);
+    const checked: ReturnType<typeof checkEventPayload> = checkEventPayload(
+      payload?.event,
+      payload?.location,
+    );
     if (checked.error !== undefined) {
       return NextResponse.json(
         { success: false, message: checked.error },
@@ -139,8 +124,8 @@ export async function POST(request: Request) {
     }
 
     const result = await createEventWithLocation({
-      ...payload,
-      event: checked.event,
+      location: checked.location,
+      event: isPublicRequest ? toPublicRequestEvent(checked.event) : checked.event,
     });
 
     return NextResponse.json(result, {
@@ -152,16 +137,12 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to create event.",
+        message: getSaveErrorMessage(error, "create the event"),
       },
-      { status: 500 },
+      { status: error instanceof EventScheduleConflictError ? 409 : 500 },
     );
   }
 }
-
 
 /**
  * PATCH
@@ -184,7 +165,15 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const body = await request.json();
+    let body: { action?: string; id?: unknown };
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, message: "Request body must be valid JSON." },
+        { status: 400 },
+      );
+    }
 
     /*
      * Reactivate
@@ -210,8 +199,7 @@ export async function PATCH(request: Request) {
     /**
      * Normal update
      */
-    const payload: UpdateEventWithLocationInput =
-      body;
+    const payload: UpdateEventWithLocationInput = body as unknown as UpdateEventWithLocationInput;
 
     if (!Number.isInteger(payload.id)) {
       return NextResponse.json(
@@ -223,7 +211,10 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const checked: ReturnType<typeof checkEventRules> = checkEventRules(payload.event);
+    const checked: ReturnType<typeof checkEventPayload> = checkEventPayload(
+      payload.event,
+      payload.location,
+    );
     if (checked.error !== undefined) {
       return NextResponse.json(
         { success: false, message: checked.error },
@@ -232,7 +223,8 @@ export async function PATCH(request: Request) {
     }
 
     const result = await updateEventWithLocation({
-      ...payload,
+      id: payload.id,
+      location: { ...checked.location, id: payload.location.id },
       event: checked.event,
     });
 
@@ -243,12 +235,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to update event.",
+        message: getSaveErrorMessage(error, "update the event"),
       },
-      { status: 500 },
+      { status: error instanceof EventScheduleConflictError ? 409 : 500 },
     );
   }
 }
@@ -270,13 +259,9 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const { searchParams } = new URL(
-      request.url,
-    );
+    const { searchParams } = new URL(request.url);
 
-    const eventId = Number(
-      searchParams.get("id"),
-    );
+    const eventId = Number(searchParams.get("id"));
 
     if (!Number.isInteger(eventId)) {
       return NextResponse.json(
@@ -288,8 +273,7 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const result =
-      await deleteOrDeactivateEvent(eventId);
+    const result = await deleteOrDeactivateEvent(eventId);
 
     return NextResponse.json(result);
   } catch (error) {
@@ -298,10 +282,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to delete event.",
+        message: msg.unableTo("delete the event"),
       },
       { status: 500 },
     );
