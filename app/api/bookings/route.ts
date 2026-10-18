@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { msg } from "@/lib/validation/messages";
+
 import {
   getCurrentProfile,
   isAdminRole,
@@ -54,7 +56,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Get admin bookings error:", error);
     return NextResponse.json(
-      { message: "Failed to load bookings." },
+      { message: msg.unableTo("load bookings") },
       { status: 500 },
     );
   }

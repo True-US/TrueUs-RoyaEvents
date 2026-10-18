@@ -18,7 +18,9 @@ import {
 } from "@/features/events/server/service";
 import { getAdminEvents } from "@/features/events/server/queries";
 // Same checks as the admin server actions (features/events/server/actions.ts).
-import { checkEventRules } from "@/features/events/server/event-payload";
+import { checkEventPayload, toPublicRequestEvent } from "@/features/events/server/event-payload";
+import { getSaveErrorMessage } from "@/features/events/server/save-error";
+import { msg } from "@/lib/validation/messages";
 
 async function requireAdmin() {
   const profile = await getCurrentProfile();
@@ -69,7 +71,7 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to load events.",
+        message: msg.unableTo("load events"),
       },
       { status: 500 },
     );
@@ -82,9 +84,21 @@ export async function GET() {
  * Creates an event.
  */
 export async function POST(request: Request) {
-  const payload: CreateEventWithLocationInput = await request.json();
+  let payload: CreateEventWithLocationInput;
   try {
-    if (payload.event.eventType !== "custom_event") {
+    payload = await request.json();
+  } catch {
+    return NextResponse.json(
+      { success: false, message: "Request body must be valid JSON." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    // Only the public "custom event" request may skip the admin check. Its
+    // event is limited below, so it can never be published or priced.
+    const isPublicRequest: boolean = payload?.event?.eventType === "custom_event";
+    if (!isPublicRequest) {
       const profile = await requireAdmin();
 
       if (!profile) {
@@ -98,8 +112,9 @@ export async function POST(request: Request) {
       }
     }
 
-    const checked: ReturnType<typeof checkEventRules> = checkEventRules(
+    const checked: ReturnType<typeof checkEventPayload> = checkEventPayload(
       payload?.event,
+      payload?.location,
     );
     if (checked.error !== undefined) {
       return NextResponse.json(
@@ -109,8 +124,8 @@ export async function POST(request: Request) {
     }
 
     const result = await createEventWithLocation({
-      ...payload,
-      event: checked.event,
+      location: checked.location,
+      event: isPublicRequest ? toPublicRequestEvent(checked.event) : checked.event,
     });
 
     return NextResponse.json(result, {
@@ -122,8 +137,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error ? error.message : "Failed to create event.",
+        message: getSaveErrorMessage(error, "create the event"),
       },
       { status: error instanceof EventScheduleConflictError ? 409 : 500 },
     );
@@ -151,7 +165,15 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const body = await request.json();
+    let body: { action?: string; id?: unknown };
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, message: "Request body must be valid JSON." },
+        { status: 400 },
+      );
+    }
 
     /*
      * Reactivate
@@ -177,7 +199,7 @@ export async function PATCH(request: Request) {
     /**
      * Normal update
      */
-    const payload: UpdateEventWithLocationInput = body;
+    const payload: UpdateEventWithLocationInput = body as unknown as UpdateEventWithLocationInput;
 
     if (!Number.isInteger(payload.id)) {
       return NextResponse.json(
@@ -189,8 +211,9 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const checked: ReturnType<typeof checkEventRules> = checkEventRules(
+    const checked: ReturnType<typeof checkEventPayload> = checkEventPayload(
       payload.event,
+      payload.location,
     );
     if (checked.error !== undefined) {
       return NextResponse.json(
@@ -200,7 +223,8 @@ export async function PATCH(request: Request) {
     }
 
     const result = await updateEventWithLocation({
-      ...payload,
+      id: payload.id,
+      location: { ...checked.location, id: payload.location.id },
       event: checked.event,
     });
 
@@ -211,8 +235,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error ? error.message : "Failed to update event.",
+        message: getSaveErrorMessage(error, "update the event"),
       },
       { status: error instanceof EventScheduleConflictError ? 409 : 500 },
     );
@@ -259,8 +282,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error ? error.message : "Failed to delete event.",
+        message: msg.unableTo("delete the event"),
       },
       { status: 500 },
     );

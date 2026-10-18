@@ -4,6 +4,7 @@ import type {
 } from "./types";
 
 import type { AdminEvent } from "./types";
+import { msg } from "@/lib/validation/messages";
 
 async function parseResponse<T>(res: Response): Promise<T> {
   const text = await res.text();
@@ -23,7 +24,7 @@ async function parseResponse<T>(res: Response): Promise<T> {
       "message" in data &&
       typeof data.message === "string"
         ? data.message
-        : "Something went wrong.";
+        : msg.unableTo("complete the request");
 
     throw new Error(message);
   }
@@ -92,7 +93,7 @@ export async function createEventRequest(
     "message" in data &&
     typeof data.message === "string"
       ? data.message
-      : "Something went wrong while submitting the event.";
+      : msg.unableTo("submit your request");
 
   return { success: false, message };
 }

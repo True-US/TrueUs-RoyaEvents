@@ -27,18 +27,35 @@ import {
   getAdminEventsRequest,
   reactivateEventRequest,
 } from "@/features/events/api";
+import { FieldError, FormError, FormSuccess, invalidInputClass } from "@/components/ui/form-feedback";
 import { CoverInput } from "@/features/events/components/cover-input";
-import { EVENT_STATUS } from "@/features/events/constants";
+import {
+  EVENT_DESCRIPTION_MAX,
+  EVENT_SHORT_DESCRIPTION_MAX,
+  EVENT_SLUG_MAX,
+  EVENT_STATUS,
+  EVENT_TITLE_MAX,
+  LOCATION_ADDRESS_MAX,
+  LOCATION_CITY_MAX,
+  LOCATION_COUNTRY_MAX,
+  LOCATION_NAME_MAX,
+  LOCATION_POSTAL_CODE_MAX,
+  LOCATION_PROVINCE_MAX,
+} from "@/features/events/constants";
 // Server Actions: called like normal async functions, but run on the server.
 import { createEventAction, updateEventAction } from "@/features/events/server/actions";
 import {
+  eventDetailsSchema,
+  eventLocationSchema,
   getEventRuleErrors,
   validateEventRules,
-  type EventRuleField,
   type EventRulesInput,
 } from "@/features/events/schemas";
 import { dateToZonedInput, zonedInputToDate } from "@/features/events/utils/dates";
 import { formatPrice } from "@/features/events/utils/format";
+import { makeSlug } from "@/features/events/utils/slug";
+import { getFieldErrors } from "@/lib/validation/errors";
+import { msg } from "@/lib/validation/messages";
 
 const inputClass =
   "mt-1 w-full rounded-md border border-roya-slate/30 bg-white px-3 py-2 text-sm text-roya-ink outline-none focus:border-roya-sun focus:ring-1 focus:ring-roya-sun";
@@ -84,10 +101,6 @@ const emptyForm: EventForm = {
   postalCode: "",
   country: "Canada",
 };
-
-// Same look as inputClass, with a red border and ring for invalid fields.
-const invalidInputClass: string =
-  "mt-1 w-full rounded-md border border-red-500 bg-white px-3 py-2 text-sm text-roya-ink outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500";
 
 /**
  * Reads a number input, where an empty box means "not set".
@@ -137,22 +150,45 @@ function buildActionFormData(
 }
 
 /**
- * Red message under an input. Renders nothing when there is no error.
- * @param props.id The id the input points to with aria-describedby.
- * @param props.message The error message, if any.
- * @returns The message paragraph, or null.
+ * Checks every field of the form with the same schemas the server uses.
+ * @param form The current form values.
+ * @returns The first error message for each invalid field; {} when all is valid.
  */
-function FieldError({ id, message }: { id: string; message?: string }) {
-  if (!message) {
-    return null;
+function getFormErrors(form: EventForm): Partial<Record<keyof EventForm, string>> {
+  const errors: Partial<Record<keyof EventForm, string>> = getEventRuleErrors(toRulesInput(form));
+
+  const details: ReturnType<typeof eventDetailsSchema.safeParse> = eventDetailsSchema.safeParse({
+    title: form.title,
+    // An empty slug is filled from the title on save, so check what will be saved.
+    slug: form.slug.trim() || makeSlug(form.title),
+    shortDescription: form.shortDescription,
+    description: form.description,
+    status: form.status,
+  });
+  if (!details.success) {
+    Object.assign(errors, getFieldErrors(details.error));
   }
 
-  return (
-    // aria-live: screen readers announce the message when it appears.
-    <p aria-live="polite" className="mt-1 text-sm text-red-600" id={id}>
-      {message}
-    </p>
-  );
+  const place: ReturnType<typeof eventLocationSchema.safeParse> = eventLocationSchema.safeParse({
+    name: form.locationName,
+    address: form.address,
+    city: form.city,
+    province: form.province,
+    postalCode: form.postalCode,
+    country: form.country,
+  });
+  if (!place.success) {
+    const placeErrors: Record<string, string> = getFieldErrors(place.error);
+    for (const [field, message] of Object.entries(placeErrors)) {
+      // The schema calls the location's name "name"; the form calls it "locationName".
+      const formField: keyof EventForm = field === "name" ? "locationName" : (field as keyof EventForm);
+      if (!errors[formField]) {
+        errors[formField] = message;
+      }
+    }
+  }
+
+  return errors;
 }
 
 export function ManageEvents() {
@@ -174,6 +210,8 @@ export function ManageEvents() {
 
   const [message, setMessage] =
     useState("");
+  // True when `message` is an error; false for a success message.
+  const [messageIsError, setMessageIsError] = useState<boolean>(false);
 
   // Fields the admin has changed. Errors show only for these (or after a
   // submit attempt), so a fresh form doesn't open covered in red.
@@ -245,19 +283,37 @@ export function ManageEvents() {
 
   // Derived from the form on every render (every keystroke), so it is never
   // out of date. No extra state or useEffect needed.
-  const ruleErrors: Partial<Record<EventRuleField, string>> = getEventRuleErrors(toRulesInput(form));
+  const formErrors: Partial<Record<keyof EventForm, string>> = getFormErrors(form);
 
   /**
    * The error to show under a field right now.
    * @param field The field to check.
    * @returns The message once the field is touched or a submit was tried; otherwise undefined.
    */
-  function fieldError(field: EventRuleField): string | undefined {
+  function fieldError(field: keyof EventForm): string | undefined {
     if (!touched[field] && !submitAttempted) {
       return undefined;
     }
 
-    return ruleErrors[field];
+    return formErrors[field];
+  }
+
+  /**
+   * Shows a failure message (red).
+   * @param text The message.
+   */
+  function showError(text: string): void {
+    setMessageIsError(true);
+    setMessage(text);
+  }
+
+  /**
+   * Shows a success message (green).
+   * @param text The message.
+   */
+  function showSuccess(text: string): void {
+    setMessageIsError(false);
+    setMessage(text);
   }
 
   async function loadEvents() {
@@ -269,11 +325,7 @@ export function ManageEvents() {
 
       setEvents(result.events ?? []);
     } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Failed to load events.",
-      );
+      showError(error instanceof Error ? error.message : msg.unableTo("load events"));
     } finally {
       setLoading(false);
     }
@@ -294,11 +346,7 @@ export function ManageEvents() {
         }
       } catch (error) {
         if (!cancelled) {
-          setMessage(
-            error instanceof Error
-              ? error.message
-              : "Failed to load events.",
-          );
+          showError(error instanceof Error ? error.message : msg.unableTo("load events"));
         }
       } finally {
         if (!cancelled) {
@@ -330,14 +378,6 @@ export function ManageEvents() {
     setEditingId(null);
     setTouched({});
     setSubmitAttempted(false);
-  }
-
-  function makeSlug(title: string) {
-    return title
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
   }
 
   function editEvent(event: AdminEvent) {
@@ -411,11 +451,11 @@ export function ManageEvents() {
     // Show every field's error, even untouched ones, and stop here if any.
     setSubmitAttempted(true);
     if (coverBusy) {
-      setMessage("Please wait until the cover image is ready.");
+      showError("Wait until the cover image is ready.");
       return;
     }
-    if (Object.keys(ruleErrors).length > 0 || coverRequiredError) {
-      setMessage("Please fix the fields marked in red.");
+    if (Object.keys(formErrors).length > 0 || coverRequiredError) {
+      showError(msg.fixFields);
       return;
     }
 
@@ -455,7 +495,7 @@ export function ManageEvents() {
       // moments here, so the server (UTC on Vercel) saves the right time.
       const startMoment: Date | null = zonedInputToDate(form.startDatetime);
       if (!startMoment) {
-        throw new Error("Start date and time is not valid.");
+        throw new Error(msg.invalid("Start date and time"));
       }
       const endMoment: Date | null = form.endDatetime
         ? zonedInputToDate(form.endDatetime)
@@ -481,7 +521,7 @@ export function ManageEvents() {
           event: {
             title: form.title,
             slug:
-              form.slug ||
+              form.slug.trim() ||
               makeSlug(form.title),
 
             shortDescription:
@@ -524,13 +564,11 @@ export function ManageEvents() {
           // the picked image stays selected.
           await loadEvents();
           setEditingId(result.eventId);
-          setMessage(result.coverError);
+          showError(result.coverError);
           return;
         }
 
-        setMessage(
-          "Event created successfully.",
-        );
+        showSuccess("Event created successfully.");
       } else {
         /*
          * UPDATE
@@ -579,7 +617,7 @@ export function ManageEvents() {
           event: {
             title: form.title,
 
-            slug: form.slug,
+            slug: form.slug.trim() || makeSlug(form.title),
 
             shortDescription:
               form.shortDescription ||
@@ -613,20 +651,14 @@ export function ManageEvents() {
           throw new Error(result.message);
         }
 
-        setMessage(
-          "Event updated successfully.",
-        );
+        showSuccess("Event updated successfully.");
       }
 
       setIsFormOpen(false);
 
       await loadEvents();
     } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Something went wrong.",
-      );
+      showError(error instanceof Error ? error.message : msg.unableTo("save the event"));
     } finally {
       setSaving(false);
     }
@@ -656,22 +688,16 @@ export function ManageEvents() {
         result.action ===
         "deactivated"
       ) {
-        setMessage(
+        showSuccess(
           "This event has bookings, so it was deactivated instead of permanently deleted.",
         );
       } else {
-        setMessage(
-          "Event deleted successfully.",
-        );
+        showSuccess("Event deleted successfully.");
       }
 
       await loadEvents();
     } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Failed to delete event.",
-      );
+      showError(error instanceof Error ? error.message : msg.unableTo("delete the event"));
     }
   }
 
@@ -685,17 +711,11 @@ export function ManageEvents() {
         eventId,
       );
 
-      setMessage(
-        "Event reactivated successfully. It is now a draft.",
-      );
+      showSuccess("Event reactivated successfully. It is now a draft.");
 
       await loadEvents();
     } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Failed to reactivate event.",
-      );
+      showError(error instanceof Error ? error.message : msg.unableTo("reactivate the event"));
     }
   }
 
@@ -729,8 +749,8 @@ export function ManageEvents() {
 
           {/* Results (saved, deleted, errors) show on the page while the popup is closed. */}
           {message && !isFormOpen && (
-            <div className="mt-4 rounded-md border border-roya-slate/20 bg-white px-4 py-3 text-sm text-roya-ink">
-              {message}
+            <div className="mt-4">
+              {messageIsError ? <FormError message={message} /> : <FormSuccess message={message} />}
             </div>
           )}
 
@@ -906,12 +926,11 @@ export function ManageEvents() {
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6 [scrollbar-width:thin]">
           {/* Save errors show inside the popup, next to the form. */}
           {message && isFormOpen && (
-            <div className="rounded-md border border-roya-slate/20 bg-white px-4 py-3 text-sm text-roya-ink">
-              {message}
-            </div>
+            messageIsError ? <FormError message={message} /> : <FormSuccess message={message} />
           )}
 
           <form
+            noValidate
             onSubmit={handleSubmit}
             className="rounded-xl border border-roya-slate/20 bg-white p-6 shadow-sm"
           >
@@ -931,76 +950,74 @@ export function ManageEvents() {
               </div>
 
               <div>
-                <label className="text-sm font-semibold">
+                <label className="text-sm font-semibold" htmlFor="event-title">
                   Event Title
                 </label>
 
                 <input
-                  className={inputClass}
+                  aria-describedby="event-title-error"
+                  aria-invalid={Boolean(fieldError("title"))}
+                  className={fieldError("title") ? invalidInputClass : inputClass}
+                  id="event-title"
+                  maxLength={EVENT_TITLE_MAX}
                   value={form.title}
-                  onChange={(e) =>
-                    updateField(
-                      "title",
-                      e.target.value,
-                    )
-                  }
+                  onChange={(e) => updateField("title", e.target.value)}
                   required
                 />
+                <FieldError id="event-title-error" message={fieldError("title")} />
               </div>
 
               <div>
-                <label className="text-sm font-semibold">
+                <label className="text-sm font-semibold" htmlFor="event-slug">
                   Slug
                 </label>
 
                 <input
-                  className={inputClass}
+                  aria-describedby="event-slug-error"
+                  aria-invalid={Boolean(fieldError("slug"))}
+                  className={fieldError("slug") ? invalidInputClass : inputClass}
+                  id="event-slug"
+                  maxLength={EVENT_SLUG_MAX}
                   value={form.slug}
-                  onChange={(e) =>
-                    updateField(
-                      "slug",
-                      e.target.value,
-                    )
-                  }
+                  onChange={(e) => updateField("slug", e.target.value)}
                   required
                 />
+                <FieldError id="event-slug-error" message={fieldError("slug")} />
               </div>
 
               <div className="md:col-span-2">
-                <label className="text-sm font-semibold">
+                <label className="text-sm font-semibold" htmlFor="event-short-description">
                   Short Description
                 </label>
 
                 <input
-                  className={inputClass}
-                  value={
-                    form.shortDescription
-                  }
-                  onChange={(e) =>
-                    updateField(
-                      "shortDescription",
-                      e.target.value,
-                    )
-                  }
+                  aria-describedby="event-short-description-error"
+                  aria-invalid={Boolean(fieldError("shortDescription"))}
+                  className={fieldError("shortDescription") ? invalidInputClass : inputClass}
+                  id="event-short-description"
+                  maxLength={EVENT_SHORT_DESCRIPTION_MAX}
+                  value={form.shortDescription}
+                  onChange={(e) => updateField("shortDescription", e.target.value)}
                 />
+                <FieldError id="event-short-description-error" message={fieldError("shortDescription")} />
               </div>
 
               <div className="md:col-span-2">
-                <label className="text-sm font-semibold">
+                <label className="text-sm font-semibold" htmlFor="event-description">
                   Description
                 </label>
 
                 <textarea
-                  className={inputClass}
+                  aria-describedby="event-description-error"
+                  aria-invalid={Boolean(fieldError("description"))}
+                  className={fieldError("description") ? invalidInputClass : inputClass}
+                  id="event-description"
+                  maxLength={EVENT_DESCRIPTION_MAX}
                   rows={5}
                   value={form.description}
-                  onChange={(e) =>
-                    updateField(
-                      "description",
-                      e.target.value,
-                    )
-                  }
+                  onChange={(e) => updateField("description", e.target.value)}
                 />
+                <FieldError id="event-description-error" message={fieldError("description")} />
               </div>
 
               <div>
@@ -1039,6 +1056,7 @@ export function ManageEvents() {
                   id="event-capacity"
                   type="number"
                   min="0"
+                  step="1"
                   value={form.capacity}
                   onChange={(e) =>
                     updateField(
@@ -1062,6 +1080,7 @@ export function ManageEvents() {
                   id="event-available-spots"
                   type="number"
                   min="0"
+                  step="1"
                   value={
                     form.availableSpots
                   }
@@ -1076,19 +1095,17 @@ export function ManageEvents() {
               </div>
 
               <div>
-                <label className="text-sm font-semibold">
+                <label className="text-sm font-semibold" htmlFor="event-status">
                   Status
                 </label>
 
                 <select
-                  className={inputClass}
+                  aria-describedby="event-status-error"
+                  aria-invalid={Boolean(fieldError("status"))}
+                  className={fieldError("status") ? invalidInputClass : inputClass}
+                  id="event-status"
                   value={form.status}
-                  onChange={(e) =>
-                    updateField(
-                      "status",
-                      e.target.value,
-                    )
-                  }
+                  onChange={(e) => updateField("status", e.target.value)}
                 >
                   <option value="DRAFT">
                     Draft
@@ -1102,6 +1119,7 @@ export function ManageEvents() {
                     Unpublished
                   </option>
                 </select>
+                <FieldError id="event-status-error" message={fieldError("status")} />
               </div>
 
               <div>
@@ -1160,111 +1178,109 @@ export function ManageEvents() {
               </div>
 
               <div className="md:col-span-2">
-                <label className="text-sm font-semibold">
+                <label className="text-sm font-semibold" htmlFor="event-location-name">
                   Location Name
                 </label>
 
                 <input
-                  className={inputClass}
-                  value={
-                    form.locationName
-                  }
-                  onChange={(e) =>
-                    updateField(
-                      "locationName",
-                      e.target.value,
-                    )
-                  }
+                  aria-describedby="event-location-name-error"
+                  aria-invalid={Boolean(fieldError("locationName"))}
+                  className={fieldError("locationName") ? invalidInputClass : inputClass}
+                  id="event-location-name"
+                  maxLength={LOCATION_NAME_MAX}
+                  value={form.locationName}
+                  onChange={(e) => updateField("locationName", e.target.value)}
                   required
                 />
+                <FieldError id="event-location-name-error" message={fieldError("locationName")} />
               </div>
 
               <div className="md:col-span-2">
-                <label className="text-sm font-semibold">
+                <label className="text-sm font-semibold" htmlFor="event-address">
                   Address
                 </label>
 
                 <input
-                  className={inputClass}
+                  aria-describedby="event-address-error"
+                  aria-invalid={Boolean(fieldError("address"))}
+                  className={fieldError("address") ? invalidInputClass : inputClass}
+                  id="event-address"
+                  maxLength={LOCATION_ADDRESS_MAX}
                   value={form.address}
-                  onChange={(e) =>
-                    updateField(
-                      "address",
-                      e.target.value,
-                    )
-                  }
+                  onChange={(e) => updateField("address", e.target.value)}
                 />
+                <FieldError id="event-address-error" message={fieldError("address")} />
               </div>
 
               <div>
-                <label className="text-sm font-semibold">
+                <label className="text-sm font-semibold" htmlFor="event-city">
                   City
                 </label>
 
                 <input
-                  className={inputClass}
+                  aria-describedby="event-city-error"
+                  aria-invalid={Boolean(fieldError("city"))}
+                  className={fieldError("city") ? invalidInputClass : inputClass}
+                  id="event-city"
+                  maxLength={LOCATION_CITY_MAX}
                   value={form.city}
-                  onChange={(e) =>
-                    updateField(
-                      "city",
-                      e.target.value,
-                    )
-                  }
+                  onChange={(e) => updateField("city", e.target.value)}
                   required
                 />
+                <FieldError id="event-city-error" message={fieldError("city")} />
               </div>
 
               <div>
-                <label className="text-sm font-semibold">
+                <label className="text-sm font-semibold" htmlFor="event-province">
                   Province
                 </label>
 
                 <input
-                  className={inputClass}
+                  aria-describedby="event-province-error"
+                  aria-invalid={Boolean(fieldError("province"))}
+                  className={fieldError("province") ? invalidInputClass : inputClass}
+                  id="event-province"
+                  maxLength={LOCATION_PROVINCE_MAX}
                   value={form.province}
-                  onChange={(e) =>
-                    updateField(
-                      "province",
-                      e.target.value,
-                    )
-                  }
+                  onChange={(e) => updateField("province", e.target.value)}
                   required
                 />
+                <FieldError id="event-province-error" message={fieldError("province")} />
               </div>
 
               <div>
-                <label className="text-sm font-semibold">
+                <label className="text-sm font-semibold" htmlFor="event-postal-code">
                   Postal Code
                 </label>
 
                 <input
-                  className={inputClass}
+                  aria-describedby="event-postal-code-error"
+                  aria-invalid={Boolean(fieldError("postalCode"))}
+                  className={fieldError("postalCode") ? invalidInputClass : inputClass}
+                  id="event-postal-code"
+                  maxLength={LOCATION_POSTAL_CODE_MAX}
                   value={form.postalCode}
-                  onChange={(e) =>
-                    updateField(
-                      "postalCode",
-                      e.target.value,
-                    )
-                  }
+                  onChange={(e) => updateField("postalCode", e.target.value)}
                 />
+                <FieldError id="event-postal-code-error" message={fieldError("postalCode")} />
               </div>
 
               <div>
-                <label className="text-sm font-semibold">
+                <label className="text-sm font-semibold" htmlFor="event-country">
                   Country
                 </label>
 
                 <input
-                  className={inputClass}
+                  aria-describedby="event-country-error"
+                  aria-invalid={Boolean(fieldError("country"))}
+                  className={fieldError("country") ? invalidInputClass : inputClass}
+                  id="event-country"
+                  maxLength={LOCATION_COUNTRY_MAX}
                   value={form.country}
-                  onChange={(e) =>
-                    updateField(
-                      "country",
-                      e.target.value,
-                    )
-                  }
+                  onChange={(e) => updateField("country", e.target.value)}
                   required
                 />
+                <FieldError id="event-country-error" message={fieldError("country")} />
               </div>
 
               <label className="flex items-center gap-2 text-sm font-semibold">
