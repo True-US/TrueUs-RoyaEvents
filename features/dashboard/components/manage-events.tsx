@@ -409,7 +409,7 @@ export function ManageEvents() {
       eventType: event.eventType,
       title: event.title,
       slug: event.slug,
-      shortDescription: event.shortDescription,
+      shortDescription: event.summary,
       description: event.description,
 
       price:
@@ -903,7 +903,7 @@ export function ManageEvents() {
                             {expandedIds.includes(event.id) && (
                               <>
                                 <p className="mt-2 text-sm text-roya-slate">
-                                  {event.shortDescription}
+                                  {event.summary}
                                 </p>
 
                                 <div className="mt-3 space-y-1 text-sm text-roya-slate">
