@@ -49,7 +49,7 @@ export type EventListItem = Pick<
  * This type is only for the Admin Manage Events page.
  * It does not replace the customer Event type above.
  */
-export type AdminEvent = {
+export type eventAdventureRecord = {
   id: string;
   title: string;
   slug: string;

@@ -8,12 +8,12 @@ import { getCoverUrl } from "@/features/events/utils/cover";
 import {
   eventListOrderBy,
   eventListWhere,
+  keywordConditions,
   publicEventDetailWhere,
   visibleEventsWhere,
 } from "@/features/events/server/query-builders";
 import type { EventListParams } from "@/features/events/utils/search-params";
-import { EVENT_TYPE } from "@/features/events/constants";
-import type { AdminEvent, EventDetail, EventListItem } from "@/features/events/types";
+import type { eventAdventureRecord, EventDetail, EventListItem } from "@/features/events/types";
 import { prisma } from "@/lib/supabase/prisma";
 
 
@@ -51,6 +51,21 @@ export async function getPublicEventList(params: EventListParams): Promise<Event
     where: eventListWhere(params),
     select: eventCardSelect,
     orderBy: eventListOrderBy(params.sort),
+  });
+
+  return rows.map(toEventListItem);
+}
+
+/**
+ * Searches the events the public may see by keyword. Matches the title only, ignoring case.
+ * @param term The trimmed search text.
+ * @returns The matching events as card data, soonest first.
+ */
+export async function searchPublicEvents(term: string): Promise<EventListItem[]> {
+  const rows: EventCardRow[] = await prisma.eventAdventure.findMany({
+    where: { AND: [visibleEventsWhere(new Date()), { OR: keywordConditions(term) }] },
+    select: eventCardSelect,
+    orderBy: [{ startDatetime: "asc" }, { id: "asc" }],
   });
 
   return rows.map(toEventListItem);
@@ -202,11 +217,9 @@ export async function getEventBySlug(slug: string): Promise<Event | null> {
  * Admin needs to see ALL events, including inactive events.
  * We filter only eventType = EVENT so adventures are excluded.
  */
-export async function getAdminEvents(): Promise<AdminEvent[]> {
+export async function getAdminEvents(): Promise<eventAdventureRecord[]> {
+  // Both events and adventures: the admin page splits them into tabs.
   const events = await prisma.eventAdventure.findMany({
-    where: {
-      eventType: EVENT_TYPE.EVENT,
-    },
     include: {
       location: true,
     },

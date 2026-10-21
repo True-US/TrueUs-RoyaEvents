@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import type {
-  AdminEvent,
+  eventAdventureRecord,
   CreateEventWithLocationInput,
   EventActionResult,
   UpdateEventWithLocationInput,
@@ -24,7 +24,7 @@ import type {
 
 import {
   deleteEventRequest,
-  getAdminEventsRequest,
+  getAllRecordsRequest,
   reactivateEventRequest,
 } from "@/features/events/api";
 import { FieldError, FormError, FormSuccess, invalidInputClass } from "@/components/ui/form-feedback";
@@ -35,6 +35,7 @@ import {
   EVENT_SLUG_MAX,
   EVENT_STATUS,
   EVENT_TITLE_MAX,
+  EVENT_TYPE,
   LOCATION_ADDRESS_MAX,
   LOCATION_CITY_MAX,
   LOCATION_COUNTRY_MAX,
@@ -60,7 +61,18 @@ import { msg } from "@/lib/validation/messages";
 const inputClass =
   "mt-1 w-full rounded-md border border-roya-slate/30 bg-white px-3 py-2 text-sm text-roya-ink outline-none focus:border-roya-sun focus:ring-1 focus:ring-roya-sun";
 
+// Records shown per page in the list.
+const EVENTS_PAGE_SIZE: number = 10;
+
+// Left-side tabs: one per event type.
+const typeTabs: { value: string; label: string }[] = [
+  { value: EVENT_TYPE.EVENT, label: "Event" },
+  { value: EVENT_TYPE.ADVENTURE, label: "Adventure" },
+  { value: EVENT_TYPE.CUSTOM_EVENT, label: "Request" },
+];
+
 type EventForm = {
+  eventType: string;
   title: string;
   slug: string;
   shortDescription: string;
@@ -82,6 +94,7 @@ type EventForm = {
 };
 
 const emptyForm: EventForm = {
+  eventType: EVENT_TYPE.EVENT,
   title: "",
   slug: "",
   shortDescription: "",
@@ -192,7 +205,7 @@ function getFormErrors(form: EventForm): Partial<Record<keyof EventForm, string>
 }
 
 export function ManageEvents() {
-  const [events, setEvents] = useState<AdminEvent[]>(
+  const [events, setEvents] = useState<eventAdventureRecord[]>(
     [],
   );
 
@@ -204,6 +217,11 @@ export function ManageEvents() {
 
   const [loading, setLoading] =
     useState(true);
+
+  // List view: which type tab is open, which page, and which rows are expanded.
+  const [activeType, setActiveType] = useState<string>(EVENT_TYPE.EVENT);
+  const [page, setPage] = useState<number>(1);
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
 
   const [saving, setSaving] =
     useState(false);
@@ -226,8 +244,8 @@ export function ManageEvents() {
   const [coverBusy, setCoverBusy] = useState<boolean>(false);
 
   // The event being edited, for its saved cover. Derived, not stored.
-  const editingEvent: AdminEvent | null =
-    editingId === null ? null : events.find((event: AdminEvent) => Number(event.id) === editingId) ?? null;
+  const editingEvent: eventAdventureRecord | null =
+    editingId === null ? null : events.find((event: eventAdventureRecord) => Number(event.id) === editingId) ?? null;
   const currentCoverUrl: string | null = editingEvent?.coverUrl ?? null;
 
   // Same rule as the server: a published event needs a cover.
@@ -266,6 +284,8 @@ export function ManageEvents() {
    */
   function openCreateForm(): void {
     resetForm();
+    // New records take the type of the tab that is open.
+    setForm((current: EventForm) => ({ ...current, eventType: activeType }));
     setCoverFile(null);
     setMessage("");
     setIsFormOpen(true);
@@ -316,12 +336,12 @@ export function ManageEvents() {
     setMessage(text);
   }
 
-  async function loadEvents() {
+  async function loadAllRecords() {
     try {
       setLoading(true);
       setMessage("");
 
-      const result = await getAdminEventsRequest();
+      const result = await getAllRecordsRequest();
 
       setEvents(result.events ?? []);
     } catch (error) {
@@ -339,7 +359,7 @@ export function ManageEvents() {
         setLoading(true);
         setMessage("");
 
-        const result = await getAdminEventsRequest();
+        const result = await getAllRecordsRequest();
 
         if (!cancelled) {
           setEvents(result.events ?? []);
@@ -380,12 +400,13 @@ export function ManageEvents() {
     setSubmitAttempted(false);
   }
 
-  function editEvent(event: AdminEvent) {
+  function editEvent(event: eventAdventureRecord) {
     setEditingId(Number(event.id));
     setTouched({});
     setSubmitAttempted(false);
 
     setForm({
+      eventType: event.eventType,
       title: event.title,
       slug: event.slug,
       shortDescription: event.summary,
@@ -519,6 +540,7 @@ export function ManageEvents() {
           },
 
           event: {
+            eventType: form.eventType,
             title: form.title,
             slug:
               form.slug.trim() ||
@@ -562,7 +584,7 @@ export function ManageEvents() {
           // The event exists (as a draft) but its cover failed. Keep the
           // popup open, now editing the new event, so the admin can retry:
           // the picked image stays selected.
-          await loadEvents();
+          await loadAllRecords();
           setEditingId(result.eventId);
           showError(result.coverError);
           return;
@@ -615,6 +637,7 @@ export function ManageEvents() {
           },
 
           event: {
+            eventType: form.eventType,
             title: form.title,
 
             slug: form.slug.trim() || makeSlug(form.title),
@@ -656,7 +679,7 @@ export function ManageEvents() {
 
       setIsFormOpen(false);
 
-      await loadEvents();
+      await loadAllRecords();
     } catch (error) {
       showError(error instanceof Error ? error.message : msg.unableTo("save the event"));
     } finally {
@@ -695,7 +718,7 @@ export function ManageEvents() {
         showSuccess("Event deleted successfully.");
       }
 
-      await loadEvents();
+      await loadAllRecords();
     } catch (error) {
       showError(error instanceof Error ? error.message : msg.unableTo("delete the event"));
     }
@@ -713,30 +736,76 @@ export function ManageEvents() {
 
       showSuccess("Event reactivated successfully. It is now a draft.");
 
-      await loadEvents();
+      await loadAllRecords();
     } catch (error) {
       showError(error instanceof Error ? error.message : msg.unableTo("reactivate the event"));
     }
   }
 
+  // The open tab's records, cut into pages. Derived on every render.
+  const visibleEvents: eventAdventureRecord[] = events.filter((event: eventAdventureRecord) => event.eventType === activeType);
+  const totalPages: number = Math.max(1, Math.ceil(visibleEvents.length / EVENTS_PAGE_SIZE));
+  // Clamped, so deleting the last record of a page lands on the previous page.
+  const currentPage: number = Math.min(page, totalPages);
+  const pagedEvents: eventAdventureRecord[] = visibleEvents.slice(
+    (currentPage - 1) * EVENTS_PAGE_SIZE,
+    currentPage * EVENTS_PAGE_SIZE,
+  );
+
+  /**
+   * Opens a type tab, starting at its first page.
+   * @param type The event type of the tab.
+   */
+  function selectType(type: string): void {
+    setActiveType(type);
+    setPage(1);
+  }
+
+  /**
+   * Expands a collapsed row, or collapses an expanded one.
+   * @param id The event id.
+   */
+  function toggleExpanded(id: string): void {
+    setExpandedIds((current: string[]) =>
+      current.includes(id) ? current.filter((item: string) => item !== id) : [...current, id],
+    );
+  }
+
   return (
     <div className="space-y-10">
       <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-roya-sun-deep">
-          Event Management
+        <p className="text-mid font-semibold uppercase tracking-[0.2em] text-roya-sun-deep">
+          Event & Adventure
         </p>
 
         <section>
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h2 className="font-display text-2xl font-bold text-roya-ink">
-                All Events
-              </h2>
-
-              <p className="mt-1 text-sm text-roya-slate">
-                Active and inactive events are shown here.
-              </p>
-            </div>
+          <div className="flex flex-wrap items-center justify-end gap-4">
+            {/* Pager sits in front of the create button (same markup as Manage Bookings). */}
+            {!loading && visibleEvents.length > 0 && (
+              <nav aria-label="Record pages" className="flex flex-wrap items-center gap-3">
+                <p className="text-sm text-roya-slate">
+                  Page {currentPage} of {totalPages} · {visibleEvents.length} total
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    className="rounded-md border border-roya-slate/30 px-4 py-2 text-sm font-medium text-roya-ink hover:bg-roya-slate/5 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPage(currentPage - 1)}
+                    type="button"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    className="rounded-md border border-roya-slate/30 px-4 py-2 text-sm font-medium text-roya-ink hover:bg-roya-slate/5 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setPage(currentPage + 1)}
+                    type="button"
+                  >
+                    Next
+                  </button>
+                </div>
+              </nav>
+            )}
 
             <button
               type="button"
@@ -754,133 +823,173 @@ export function ManageEvents() {
             </div>
           )}
 
-          <div className="mt-5">
-            {loading ? (
-              <p className="text-sm text-roya-slate">
-                Loading events...
-              </p>
-            ) : events.length === 0 ? (
-              <p className="text-sm text-roya-slate">
-                No events found.
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {events.map((event) => (
-                  <div
-                    key={event.id}
-                    className="rounded-xl border border-roya-slate/20 bg-white p-5 shadow-sm"
-                  >
-                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-display text-xl font-bold text-roya-ink">
-                            {event.title}
-                          </h3>
+          {/* Type tabs on the left; the list shrinks to fit beside them. */}
+          <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-start">
+            <div
+              role="tablist"
+              aria-orientation="vertical"
+              className="flex shrink-0 gap-1 md:w-32 md:flex-col md:border-r md:border-roya-slate/20"
+            >
+              {typeTabs.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeType === tab.value}
+                  onClick={() => selectType(tab.value)}
+                  className={`px-4 py-3 text-left text-sm font-semibold md:border-r-2 ${activeType === tab.value
+                    ? "border-roya-sun text-roya-ink md:bg-white"
+                    : "border-transparent text-roya-slate hover:text-roya-ink"
+                    }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-                          <span className="rounded-full bg-roya-slate/10 px-2.5 py-1 text-xs font-semibold">
-                            {event.isActive
-                              ? "Active"
-                              : "Inactive"}
-                          </span>
+            <div className="min-w-0 flex-1">
+              {loading ? (
+                <p className="text-sm text-roya-slate">
+                  Loading events...
+                </p>
+              ) : visibleEvents.length === 0 ? (
+                <p className="text-sm text-roya-slate">
+                  No {typeTabs.find((tab) => tab.value === activeType)?.label.toLowerCase()} records found.
+                </p>
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    {pagedEvents.map((event) => (
+                      <div
+                        key={event.id}
+                        className="rounded-xl border border-roya-slate/20 bg-white p-5 shadow-sm"
+                      >
+                        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                          <div className="min-w-0 flex-1">
+                            {/* One line: toggle, title, date, status. */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                aria-expanded={expandedIds.includes(event.id)}
+                                aria-label={expandedIds.includes(event.id) ? "Hide details" : "Show details"}
+                                onClick={() => toggleExpanded(event.id)}
+                                className="rounded-md px-2 py-1 text-sm text-roya-slate hover:bg-roya-slate/10"
+                              >
+                                {expandedIds.includes(event.id) ? "▼" : "▶"}
+                              </button>
 
-                          <span className="rounded-full bg-roya-slate/10 px-2.5 py-1 text-xs font-semibold">
-                            {event.status}
-                          </span>
-                        </div>
+                              <h3 className="font-display text-xl font-bold text-roya-ink">
+                                {event.title}
+                              </h3>
 
-                        <p className="mt-2 text-sm text-roya-slate">
-                          {event.summary}
-                        </p>
+                              <span className="text-sm text-roya-slate">
+                                {new Date(
+                                  event.startsAt,
+                                ).toLocaleString()}
+                              </span>
 
-                        <div className="mt-3 space-y-1 text-sm text-roya-slate">
-                          <p>
-                            <strong>
-                              Price:
-                            </strong>{" "}
-                            {/* Same "Free" / "$35" / "$12.50" text as the public pages. */}
-                            {formatPrice(
-                              event.price === null
-                                ? null
-                                : Number(event.price),
+                              <span className="rounded-full bg-roya-slate/10 px-2.5 py-1 text-xs font-semibold">
+                                {event.isActive
+                                  ? "Active"
+                                  : "Inactive"}
+                              </span>
+
+                              <span className="rounded-full bg-roya-slate/10 px-2.5 py-1 text-xs font-semibold">
+                                {event.status}
+                              </span>
+                            </div>
+
+                            {/* Hidden until the toggle is clicked. */}
+                            {expandedIds.includes(event.id) && (
+                              <>
+                                <p className="mt-2 text-sm text-roya-slate">
+                                  {event.summary}
+                                </p>
+
+                                <div className="mt-3 space-y-1 text-sm text-roya-slate">
+                                  <p>
+                                    <strong>
+                                      Price:
+                                    </strong>{" "}
+                                    {/* Same "Free" / "$35" / "$12.50" text as the public pages. */}
+                                    {formatPrice(
+                                      event.price === null
+                                        ? null
+                                        : Number(event.price),
+                                    )}
+                                  </p>
+
+                                  <p>
+                                    <strong>
+                                      Location:
+                                    </strong>{" "}
+                                    {event.location
+                                      ?.name ??
+                                      "No location"}
+                                  </p>
+
+                                  <p>
+                                    <strong>
+                                      Capacity:
+                                    </strong>{" "}
+                                    {event.capacity ??
+                                      "Unlimited"}
+                                  </p>
+                                </div>
+                              </>
                             )}
-                          </p>
+                          </div>
 
-                          <p>
-                            <strong>
-                              Location:
-                            </strong>{" "}
-                            {event.location
-                              ?.name ??
-                              "No location"}
-                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                editEvent(
+                                  event,
+                                )
+                              }
+                              className="rounded-md border border-roya-slate/30 px-4 py-2 text-sm font-semibold hover:bg-roya-slate/5"
+                            >
+                              Edit
+                            </button>
 
-                          <p>
-                            <strong>
-                              Starts:
-                            </strong>{" "}
-                            {new Date(
-                              event.startsAt,
-                            ).toLocaleString()}
-                          </p>
-
-                          <p>
-                            <strong>
-                              Capacity:
-                            </strong>{" "}
-                            {event.capacity ??
-                              "Unlimited"}
-                          </p>
+                            {event.isActive ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDelete(
+                                    Number(
+                                      event.id,
+                                    ),
+                                  )
+                                }
+                                className="rounded-md border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                              >
+                                Delete
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleReactivate(
+                                    Number(
+                                      event.id,
+                                    ),
+                                  )
+                                }
+                                className="rounded-md border border-green-300 px-4 py-2 text-sm font-semibold text-green-700 hover:bg-green-50"
+                              >
+                                Reactivate
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            editEvent(
-                              event,
-                            )
-                          }
-                          className="rounded-md border border-roya-slate/30 px-4 py-2 text-sm font-semibold hover:bg-roya-slate/5"
-                        >
-                          Edit
-                        </button>
-
-                        {event.isActive ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleDelete(
-                                Number(
-                                  event.id,
-                                ),
-                              )
-                            }
-                            className="rounded-md border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
-                          >
-                            Delete
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleReactivate(
-                                Number(
-                                  event.id,
-                                ),
-                              )
-                            }
-                            className="rounded-md border border-green-300 px-4 py-2 text-sm font-semibold text-green-700 hover:bg-green-50"
-                          >
-                            Reactivate
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                </>
+              )}
+            </div>
           </div>
         </section>
 
