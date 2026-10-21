@@ -3,7 +3,7 @@ import type {
   UpdateEventWithLocationInput,
 } from "./types";
 
-import type { AdminEvent } from "./types";
+import type { eventAdventureRecord } from "./types";
 import { msg } from "@/lib/validation/messages";
 
 async function parseResponse<T>(res: Response): Promise<T> {
@@ -32,9 +32,9 @@ async function parseResponse<T>(res: Response): Promise<T> {
   return data as T;
 }
 
-export async function getAdminEventsRequest(): Promise<{
+export async function getAllRecordsRequest(): Promise<{
   success: boolean;
-  events: AdminEvent[];
+  events: eventAdventureRecord[];
 }> {
   const res = await fetch("/api/events", {
     method: "GET",
@@ -43,7 +43,7 @@ export async function getAdminEventsRequest(): Promise<{
 
   return parseResponse<{
     success: boolean;
-    events: AdminEvent[];
+    events: eventAdventureRecord[];
   }>(res);
 }
 

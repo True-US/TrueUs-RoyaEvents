@@ -13,8 +13,7 @@ import {
   visibleEventsWhere,
 } from "@/features/events/server/query-builders";
 import type { EventListParams } from "@/features/events/utils/search-params";
-import { EVENT_TYPE } from "@/features/events/constants";
-import type { AdminEvent, EventDetail, EventListItem } from "@/features/events/types";
+import type { eventAdventureRecord, EventDetail, EventListItem } from "@/features/events/types";
 import { prisma } from "@/lib/supabase/prisma";
 
 
@@ -218,11 +217,9 @@ export async function getEventBySlug(slug: string): Promise<Event | null> {
  * Admin needs to see ALL events, including inactive events.
  * We filter only eventType = EVENT so adventures are excluded.
  */
-export async function getAdminEvents(): Promise<AdminEvent[]> {
+export async function getAdminEvents(): Promise<eventAdventureRecord[]> {
+  // Both events and adventures: the admin page splits them into tabs.
   const events = await prisma.eventAdventure.findMany({
-    where: {
-      eventType: EVENT_TYPE.EVENT,
-    },
     include: {
       location: true,
     },

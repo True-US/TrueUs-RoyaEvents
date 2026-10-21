@@ -16,7 +16,7 @@ import {
   reactivateEvent,
   updateEventWithLocation,
 } from "@/features/events/server/service";
-import { getAdminEvents } from "@/features/events/server/queries";
+import { getAdminEvents as getAllEventAndAdventure } from "@/features/events/server/queries";
 // Same checks as the admin server actions (features/events/server/actions.ts).
 import { checkEventPayload, toPublicRequestEvent } from "@/features/events/server/event-payload";
 import { getSaveErrorMessage } from "@/features/events/server/save-error";
@@ -59,7 +59,7 @@ export async function GET() {
       );
     }
 
-    const events = await getAdminEvents();
+    const events = await getAllEventAndAdventure();
 
     return NextResponse.json({
       success: true,

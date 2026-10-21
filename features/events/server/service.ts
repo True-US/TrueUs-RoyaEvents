@@ -20,6 +20,11 @@ export class EventScheduleConflictError extends Error {
 }
 
 function resolveEventType(eventType: string | undefined): string {
+  // "custom_event" is what the public request form sends.
+  if (eventType === EVENT_TYPE.CUSTOM_EVENT || eventType === "custom_event") {
+    return EVENT_TYPE.CUSTOM_EVENT;
+  }
+
   return eventType === EVENT_TYPE.ADVENTURE || eventType === "private_adventure"
     ? EVENT_TYPE.ADVENTURE
     : EVENT_TYPE.EVENT;
@@ -127,11 +132,8 @@ export async function createEventWithLocation(
         availableSpots:
           payload.event.availableSpots ?? payload.event.capacity ?? 0,
 
-        /*
-         * This service is specifically for Events.
-         * Must match EVENT_TYPE.EVENT ("EVENT"), or the public pages won't list it.
-         */
-        eventType: EVENT_TYPE.EVENT,
+        // "EVENT" unless the admin created it from the Adventure tab.
+        eventType: resolveEventType(payload.event.eventType),
 
         status: payload.event.status ?? "DRAFT",
 
