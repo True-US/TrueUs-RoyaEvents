@@ -95,6 +95,8 @@ export function checkEventPayload(
  */
 export function toPublicRequestEvent(event: CreateEventInput): CreateEventInput {
   return {
+    // Kept so the request is saved as a custom event, not a plain event.
+    eventType: event.eventType,
     title: event.title,
     slug: event.slug,
     shortDescription: event.shortDescription,

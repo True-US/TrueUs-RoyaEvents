@@ -19,9 +19,10 @@ export type EventStatus = (typeof EVENT_STATUS)[keyof typeof EVENT_STATUS];
 export const EVENT_TYPE = {
   EVENT: "EVENT",
   ADVENTURE: "ADVENTURE",
+  CUSTOM_EVENT: "CUSTOM_EVENT",
 } as const;
 
-// Union of the type values: "EVENT" | "ADVENTURE".
+// Union of the type values: "EVENT" | "ADVENTURE" | "CUSTOM_EVENT".
 export type EventType = (typeof EVENT_TYPE)[keyof typeof EVENT_TYPE];
 
 // Date filter tabs. `value` is what goes in the URL (?when=this-week).

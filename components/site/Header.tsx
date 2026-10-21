@@ -7,8 +7,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { createClient } from "@/lib/supabase/browser";
 
 const links = [
-  { href: "/adventures", label: "Adventures" },
   { href: "/events", label: "Events" },
+  { href: "/adventures", label: "Adventures" },
   { href: "/custom-event", label: "Custom event" },
   { href: "/tickets", label: "Tickets" },
 ];
@@ -175,7 +175,7 @@ export function Header() {
                   Dashboard
                 </Link>
                 <span className="text-roya-sun">Hi, {firstName ?? "User"}</span>
-  
+
                 <button
                   className="hover:text-roya-sun"
                   onClick={handleLogout}
