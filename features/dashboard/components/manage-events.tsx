@@ -54,6 +54,7 @@ import {
 } from "@/features/events/schemas";
 import { dateToZonedInput, zonedInputToDate } from "@/features/events/utils/dates";
 import { formatPrice } from "@/features/events/utils/format";
+import { getEventTags, isEventExpired, type EventTag } from "@/features/events/utils/status";
 import { makeSlug } from "@/features/events/utils/slug";
 import { getFieldErrors } from "@/lib/validation/errors";
 import { msg } from "@/lib/validation/messages";
@@ -70,6 +71,37 @@ const typeTabs: { value: string; label: string }[] = [
   { value: EVENT_TYPE.ADVENTURE, label: "Adventure" },
   { value: EVENT_TYPE.CUSTOM_EVENT, label: "Request" },
 ];
+
+type SortBy = "name" | "date" | "status";
+type SortDir = "asc" | "desc";
+
+/**
+ * Orders records for the "status" sort: live, READY, DRAFT, then CANCELLED.
+ * @param event The record.
+ * @returns A rank; lower comes first when ascending.
+ */
+function statusRank(event: eventAdventureRecord): number {
+  const tags: EventTag[] = getEventTags(event);
+  if (tags.includes("READY")) {
+    return 1;
+  }
+  if (tags.includes("DRAFT")) {
+    return 2;
+  }
+  if (tags.includes("CANCELLED")) {
+    return 3;
+  }
+
+  return 0;
+}
+
+// Colour of each list tag.
+const tagClass: Record<EventTag, string> = {
+  DRAFT: "bg-roya-slate/10 text-roya-slate",
+  READY: "bg-blue-100 text-blue-800",
+  EXPIRED: "bg-amber-100 text-amber-800",
+  CANCELLED: "bg-red-100 text-red-800",
+};
 
 type EventForm = {
   eventType: string;
@@ -222,6 +254,10 @@ export function ManageEvents() {
   const [activeType, setActiveType] = useState<string>(EVENT_TYPE.EVENT);
   const [page, setPage] = useState<number>(1);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
+  // List settings (the Settings dropdown above the list).
+  const [hideExpired, setHideExpired] = useState<boolean>(false);
+  const [sortBy, setSortBy] = useState<SortBy>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const [saving, setSaving] =
     useState(false);
@@ -743,7 +779,21 @@ export function ManageEvents() {
   }
 
   // The open tab's records, cut into pages. Derived on every render.
-  const visibleEvents: eventAdventureRecord[] = events.filter((event: eventAdventureRecord) => event.eventType === activeType);
+  const visibleEvents: eventAdventureRecord[] = events
+    .filter((event: eventAdventureRecord) => event.eventType === activeType)
+    .filter((event: eventAdventureRecord) => !hideExpired || !isEventExpired(event))
+    .sort((a: eventAdventureRecord, b: eventAdventureRecord) => {
+      const byStart: number = new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
+      let order: number = byStart;
+      if (sortBy === "name") {
+        order = a.title.localeCompare(b.title) || byStart;
+      }
+      if (sortBy === "status") {
+        order = statusRank(a) - statusRank(b) || byStart;
+      }
+
+      return sortDir === "asc" ? order : -order;
+    });
   const totalPages: number = Math.max(1, Math.ceil(visibleEvents.length / EVENTS_PAGE_SIZE));
   // Clamped, so deleting the last record of a page lands on the previous page.
   const currentPage: number = Math.min(page, totalPages);
@@ -814,6 +864,68 @@ export function ManageEvents() {
             >
               New Event/Adventure
             </button>
+
+            {/* Settings dropdown (a native <details>, so no open/close state). */}
+            <details className="relative">
+              <summary
+                aria-label="List settings"
+                title="List settings"
+                className="cursor-pointer list-none rounded-md border border-roya-slate/30 p-2 text-roya-ink hover:bg-roya-slate/5"
+              >
+                <span aria-hidden="true" className="block px-1 text-lg leading-none">⚙︎</span>
+              </summary>
+
+              <div className="absolute right-0 z-10 mt-2 w-64 space-y-3 rounded-md border border-roya-slate/20 bg-white p-4 shadow-lg">
+                <label className="flex items-center gap-2 text-sm font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={hideExpired}
+                    onChange={(e) => {
+                      setHideExpired(e.target.checked);
+                      setPage(1);
+                    }}
+                  />
+                  Hide expired
+                </label>
+
+                <div>
+                  <label className="text-sm font-semibold" htmlFor="event-sort-by">
+                    Sort by
+                  </label>
+                  <select
+                    id="event-sort-by"
+                    className={inputClass}
+                    value={sortBy}
+                    onChange={(e) => {
+                      setSortBy(e.target.value as SortBy);
+                      setPage(1);
+                    }}
+                  >
+                    <option value="date">Date</option>
+                    <option value="name">Name</option>
+                    <option value="status">Status</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold" htmlFor="event-sort-dir">
+                    Order
+                  </label>
+                  <select
+                    id="event-sort-dir"
+                    className={inputClass}
+                    value={sortDir}
+                    onChange={(e) => {
+                      setSortDir(e.target.value as SortDir);
+                      setPage(1);
+                    }}
+                  >
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                  </select>
+                </div>
+              </div>
+            </details>
           </div>
 
           {/* Results (saved, deleted, errors) show on the page while the popup is closed. */}
@@ -888,15 +1000,14 @@ export function ManageEvents() {
                                 ).toLocaleString()}
                               </span>
 
-                              <span className="rounded-full bg-roya-slate/10 px-2.5 py-1 text-xs font-semibold">
-                                {event.isActive
-                                  ? "Active"
-                                  : "Inactive"}
-                              </span>
-
-                              <span className="rounded-full bg-roya-slate/10 px-2.5 py-1 text-xs font-semibold">
-                                {event.status}
-                              </span>
+                              {getEventTags(event).map((tag: EventTag) => (
+                                <span
+                                  key={tag}
+                                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${tagClass[tag]}`}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
                             </div>
 
                             {/* Hidden until the toggle is clicked. */}
