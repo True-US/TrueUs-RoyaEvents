@@ -44,7 +44,7 @@ import {
   LOCATION_PROVINCE_MAX,
 } from "@/features/events/constants";
 // Server Actions: called like normal async functions, but run on the server.
-import { createEventAction, updateEventAction } from "@/features/events/server/actions";
+import { createEventAction, setEventPublishedAction, updateEventAction } from "@/features/events/server/actions";
 import {
   eventDetailsSchema,
   eventLocationSchema,
@@ -54,7 +54,7 @@ import {
 } from "@/features/events/schemas";
 import { dateToZonedInput, zonedInputToDate } from "@/features/events/utils/dates";
 import { formatPrice } from "@/features/events/utils/format";
-import { getEventTags, isEventExpired, type EventTag } from "@/features/events/utils/status";
+import { getEventTags, isEventExpired, isEventReady, type EventTag } from "@/features/events/utils/status";
 import { makeSlug } from "@/features/events/utils/slug";
 import { getFieldErrors } from "@/lib/validation/errors";
 import { msg } from "@/lib/validation/messages";
@@ -103,6 +103,13 @@ const tagClass: Record<EventTag, string> = {
   CANCELLED: "bg-red-100 text-red-800",
 };
 
+// Choices in the form's Type dropdown. A Request is a customer's custom event.
+const typeOptions: { value: string; label: string }[] = [
+  { value: EVENT_TYPE.EVENT, label: "Event" },
+  { value: EVENT_TYPE.ADVENTURE, label: "Adventure" },
+  { value: EVENT_TYPE.CUSTOM_EVENT, label: "Request" },
+];
+
 type EventForm = {
   eventType: string;
   title: string;
@@ -113,7 +120,6 @@ type EventForm = {
   startDatetime: string;
   endDatetime: string;
   capacity: string;
-  availableSpots: string;
   status: string;
   isActive: boolean;
 
@@ -135,7 +141,6 @@ const emptyForm: EventForm = {
   startDatetime: "",
   endDatetime: "",
   capacity: "",
-  availableSpots: "",
   status: "DRAFT",
   isActive: true,
 
@@ -169,7 +174,6 @@ function toRulesInput(form: EventForm): EventRulesInput {
   return {
     price: toNumberOrNull(form.price),
     capacity: toNumberOrNull(form.capacity),
-    availableSpots: toNumberOrNull(form.availableSpots),
     startDatetime: form.startDatetime,
     endDatetime: form.endDatetime || null,
   };
@@ -372,18 +376,16 @@ export function ManageEvents() {
     setMessage(text);
   }
 
+  // Refreshes the list after a save, delete or publish. It does not touch
+  // `loading` (the first load does): swapping the list for "Loading events..."
+  // made the page flash, and it would also wipe the success message just shown.
   async function loadAllRecords() {
     try {
-      setLoading(true);
-      setMessage("");
-
       const result = await getAllRecordsRequest();
 
       setEvents(result.events ?? []);
     } catch (error) {
       showError(error instanceof Error ? error.message : msg.unableTo("load events"));
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -466,11 +468,6 @@ export function ManageEvents() {
           ? ""
           : String(event.capacity),
 
-      availableSpots:
-        event.availableSpots === null
-          ? ""
-          : String(event.availableSpots),
-
       status: event.status,
       isActive: event.isActive,
 
@@ -530,17 +527,11 @@ export function ManageEvents() {
           ? null
           : Number(form.capacity);
 
-      const availableSpots =
-        form.availableSpots.trim() === ""
-          ? capacity
-          : Number(form.availableSpots);
-
       // Same rules as /api/events (price, spots, dates), checked here first
       // so the admin gets the message without a round trip.
       const checked: ReturnType<typeof validateEventRules> = validateEventRules({
         price,
         capacity,
-        availableSpots,
         startDatetime: form.startDatetime,
         endDatetime: form.endDatetime || null,
       });
@@ -600,7 +591,6 @@ export function ManageEvents() {
               : null,
 
             capacity,
-            availableSpots,
 
             status: form.status,
             isActive: form.isActive,
@@ -696,7 +686,6 @@ export function ManageEvents() {
               : null,
 
             capacity,
-            availableSpots,
 
             status: form.status,
             isActive: form.isActive,
@@ -757,6 +746,28 @@ export function ManageEvents() {
       await loadAllRecords();
     } catch (error) {
       showError(error instanceof Error ? error.message : msg.unableTo("delete the event"));
+    }
+  }
+
+  /**
+   * Publishes or unpublishes a record, then reloads the list.
+   * @param eventId The event id.
+   * @param publish True to publish, false to unpublish.
+   */
+  async function handleSetPublished(eventId: number, publish: boolean): Promise<void> {
+    try {
+      setMessage("");
+
+      const result: EventActionResult = await setEventPublishedAction(eventId, publish);
+      if (!result.success) {
+        throw new Error(result.message);
+      }
+
+      showSuccess(publish ? "Event published." : "Event unpublished.");
+
+      await loadAllRecords();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : msg.unableTo(publish ? "publish the event" : "unpublish the event"));
     }
   }
 
@@ -978,8 +989,8 @@ export function ManageEvents() {
                       >
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                           <div className="min-w-0 flex-1">
-                            {/* One line: toggle, title, date, status. */}
-                            <div className="flex flex-wrap items-center gap-2">
+                            {/* One line: toggle, title, date, status. As tall as the buttons on the right, so the card's top and bottom space match. */}
+                            <div className="flex min-h-10 flex-wrap items-center gap-2">
                               <button
                                 type="button"
                                 aria-expanded={expandedIds.includes(event.id)}
@@ -1052,16 +1063,50 @@ export function ManageEvents() {
                           </div>
 
                           <div className="flex flex-wrap gap-2">
+                            {/* Requests are private, so they have no Publish button. */}
+                            {event.eventType !== EVENT_TYPE.CUSTOM_EVENT && (
+                              <button
+                                type="button"
+                                disabled={event.status !== EVENT_STATUS.PUBLISHED && !isEventReady(event)}
+                                title={
+                                  event.status !== EVENT_STATUS.PUBLISHED && !isEventReady(event)
+                                    ? "Fill in the required details and add a cover image to publish."
+                                    : undefined
+                                }
+                                onClick={() =>
+                                  handleSetPublished(Number(event.id), event.status !== EVENT_STATUS.PUBLISHED)
+                                }
+                                className={
+                                  event.status === EVENT_STATUS.PUBLISHED
+                                    ? "rounded-md border border-amber-400 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50"
+                                    : "rounded-md bg-roya-sun px-4 py-2 text-sm font-semibold text-roya-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                                }
+                              >
+                                {event.status === EVENT_STATUS.PUBLISHED ? "Unpublish" : "Publish"}
+                              </button>
+                            )}
+
                             <button
                               type="button"
-                              onClick={() =>
-                                editEvent(
-                                  event,
-                                )
-                              }
-                              className="rounded-md border border-roya-slate/30 px-4 py-2 text-sm font-semibold hover:bg-roya-slate/5"
+                              onClick={() => editEvent(event)}
+                              aria-label="Edit"
+                              title="Edit"
+                              className="rounded-md border border-roya-slate/30 p-2 text-roya-ink hover:bg-roya-slate/5"
                             >
-                              Edit
+                              {/* Pen. */}
+                              <svg
+                                aria-hidden="true"
+                                className="h-5 w-5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="1.8"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="M4 20l1-4L16 5l3 3L8 19l-4 1z" />
+                                <path d="M14 7l3 3" />
+                              </svg>
                             </button>
 
                             {event.isActive ? (
@@ -1074,9 +1119,26 @@ export function ManageEvents() {
                                     ),
                                   )
                                 }
-                                className="rounded-md border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                                aria-label="Delete"
+                                title="Delete"
+                                className="rounded-md border border-red-300 p-2 text-red-700 hover:bg-red-50"
                               >
-                                Delete
+                                {/* Trash can: lid, handle, body. */}
+                                <svg
+                                  aria-hidden="true"
+                                  className="h-5 w-5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="1.8"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M4 7h16" />
+                                  <path d="M9 7V4h6v3" />
+                                  <path d="M6 7l1 13h10l1-13" />
+                                  <path d="M10 11v5M14 11v5" />
+                                </svg>
                               </button>
                             ) : (
                               <button
@@ -1160,13 +1222,32 @@ export function ManageEvents() {
                 <CoverInput
                   currentCoverUrl={currentCoverUrl}
                   disabled={saving}
-                  // Shown once the admin picks Published, or tries to save.
-                  error={touched.status || submitAttempted ? coverRequiredError : undefined}
+                  // Shown when a save is tried on a published event with no cover.
+                  error={submitAttempted ? coverRequiredError : undefined}
                   file={coverFile}
                   id="event-cover"
                   onBusyChange={setCoverBusy}
                   onFileChange={setCoverFile}
                 />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold" htmlFor="event-type">
+                  Type
+                </label>
+
+                <select
+                  className={inputClass}
+                  id="event-type"
+                  value={form.eventType}
+                  onChange={(e) => updateField("eventType", e.target.value)}
+                >
+                  {typeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -1286,60 +1367,6 @@ export function ManageEvents() {
                   }
                 />
                 <FieldError id="event-capacity-error" message={fieldError("capacity")} />
-              </div>
-
-              <div>
-                <label className="text-sm font-semibold" htmlFor="event-available-spots">
-                  Available Spots
-                </label>
-
-                <input
-                  aria-describedby="event-available-spots-error"
-                  aria-invalid={Boolean(fieldError("availableSpots"))}
-                  className={fieldError("availableSpots") ? invalidInputClass : inputClass}
-                  id="event-available-spots"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={
-                    form.availableSpots
-                  }
-                  onChange={(e) =>
-                    updateField(
-                      "availableSpots",
-                      e.target.value,
-                    )
-                  }
-                />
-                <FieldError id="event-available-spots-error" message={fieldError("availableSpots")} />
-              </div>
-
-              <div>
-                <label className="text-sm font-semibold" htmlFor="event-status">
-                  Status
-                </label>
-
-                <select
-                  aria-describedby="event-status-error"
-                  aria-invalid={Boolean(fieldError("status"))}
-                  className={fieldError("status") ? invalidInputClass : inputClass}
-                  id="event-status"
-                  value={form.status}
-                  onChange={(e) => updateField("status", e.target.value)}
-                >
-                  <option value="DRAFT">
-                    Draft
-                  </option>
-
-                  <option value="PUBLISHED">
-                    Published
-                  </option>
-
-                  <option value="UNPUBLISHED">
-                    Unpublished
-                  </option>
-                </select>
-                <FieldError id="event-status-error" message={fieldError("status")} />
               </div>
 
               <div>
@@ -1502,21 +1529,6 @@ export function ManageEvents() {
                 />
                 <FieldError id="event-country-error" message={fieldError("country")} />
               </div>
-
-              <label className="flex items-center gap-2 text-sm font-semibold">
-                <input
-                  type="checkbox"
-                  checked={form.isActive}
-                  onChange={(e) =>
-                    updateField(
-                      "isActive",
-                      e.target.checked,
-                    )
-                  }
-                />
-
-                Active
-              </label>
             </div>
 
             <div className="mt-6 flex gap-3">
