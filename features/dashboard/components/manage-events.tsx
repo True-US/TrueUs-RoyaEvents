@@ -254,7 +254,7 @@ export function ManageEvents() {
   const [page, setPage] = useState<number>(1);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   // List settings (the Settings dropdown above the list).
-  const [hideExpired, setHideExpired] = useState<boolean>(false);
+  const [hideExpired, setHideExpired] = useState<boolean>(true);
   const [sortBy, setSortBy] = useState<SortBy>("date");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
