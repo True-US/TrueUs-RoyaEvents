@@ -33,7 +33,6 @@ import {
   EVENT_DESCRIPTION_MAX,
   EVENT_SHORT_DESCRIPTION_MAX,
   EVENT_SLUG_MAX,
-  EVENT_STATUS,
   EVENT_TITLE_MAX,
   EVENT_TYPE,
   LOCATION_ADDRESS_MAX,
@@ -284,12 +283,6 @@ export function ManageEvents() {
     editingId === null ? null : events.find((event: eventAdventureRecord) => Number(event.id) === editingId) ?? null;
   const currentCoverUrl: string | null = editingEvent?.coverUrl ?? null;
 
-  // Same rule as the server: a published event needs a cover.
-  const coverRequiredError: string | undefined =
-    form.status === EVENT_STATUS.PUBLISHED && !coverFile && !currentCoverUrl
-      ? "A cover image is required to publish. Add one, or save as a draft."
-      : undefined;
-
   //---------- Create/edit popup -------------
 
   // Whether the create/edit popup is showing. The single source of truth:
@@ -511,7 +504,7 @@ export function ManageEvents() {
       showError("Wait until the cover image is ready.");
       return;
     }
-    if (Object.keys(formErrors).length > 0 || coverRequiredError) {
+    if (Object.keys(formErrors).length > 0) {
       showError(msg.fixFields);
       return;
     }
@@ -1160,8 +1153,6 @@ export function ManageEvents() {
                 <CoverInput
                   currentCoverUrl={currentCoverUrl}
                   disabled={saving}
-                  // Shown once the admin picks Published, or tries to save.
-                  error={touched.status || submitAttempted ? coverRequiredError : undefined}
                   file={coverFile}
                   id="event-cover"
                   onBusyChange={setCoverBusy}

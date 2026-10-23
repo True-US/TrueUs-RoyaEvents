@@ -64,7 +64,10 @@ export default async function EventDetailsPage({ params }: PageProps<"/events/[s
         ← All events
       </Link>
 
-      <div className="relative mt-6 aspect-[2/1] overflow-hidden bg-roya-slate">
+      {/* No cover: the placeholder is 30% of the cover height (2:1 -> 20:3). */}
+      <div
+        className={`relative mt-6 overflow-hidden bg-roya-slate ${event.coverUrl ? "aspect-[2/1]" : "aspect-[20/3]"}`}
+      >
         {event.coverUrl ? (
           <Image
             alt=""
@@ -76,8 +79,8 @@ export default async function EventDetailsPage({ params }: PageProps<"/events/[s
             src={event.coverUrl}
           />
         ) : (
-          <div className="flex h-full items-center justify-center font-display text-4xl font-bold uppercase tracking-widest text-white/40">
-            Roya
+          <div className="flex h-full items-center justify-center bg-white px-4 text-center font-display text-xl font-bold uppercase tracking-widest text-black">
+            Roya Events &amp; Adventures
           </div>
         )}
       </div>
