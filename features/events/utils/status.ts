@@ -21,12 +21,12 @@ export function isEventExpired(event: eventAdventureRecord, now: Date = new Date
 
 /**
  * Whether a saved event passes every rule needed to publish it: the same
- * schemas the form and server use, plus a cover image.
+ * schemas the form and server use. The cover image is optional.
  * @param event The admin event.
  * @returns True when nothing blocks publishing.
  */
 export function isEventReady(event: eventAdventureRecord): boolean {
-  if (!event.location || !event.coverUrl) {
+  if (!event.location) {
     return false;
   }
 

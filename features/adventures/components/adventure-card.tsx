@@ -24,7 +24,10 @@ export function AdventureCard({ adventure, preload = false }: AdventureCardProps
       className="group flex h-full w-full flex-col overflow-hidden border border-roya-slate/20 bg-white transition hover:border-roya-sun focus-visible:outline-2 focus-visible:outline-roya-sun"
       href={`/adventures/${adventure.slug}`}
     >
-      <div className="relative aspect-[2/1] overflow-hidden bg-roya-slate">
+      {/* No cover: the placeholder is 30% of the cover height (2:1 -> 20:3). */}
+      <div
+        className={`relative overflow-hidden bg-roya-slate ${adventure.coverUrl ? "aspect-[2/1]" : "aspect-[20/3]"}`}
+      >
         {adventure.coverUrl ? (
           <Image
             alt=""
@@ -35,8 +38,8 @@ export function AdventureCard({ adventure, preload = false }: AdventureCardProps
             src={adventure.coverUrl}
           />
         ) : (
-          <div className="flex h-full items-center justify-center font-display text-2xl font-bold uppercase tracking-widest text-white/40">
-            Roya
+          <div className="flex h-full items-center justify-center bg-white px-4 text-center font-display text-sm font-bold uppercase tracking-widest text-black">
+            Roya Events &amp; Adventures
           </div>
         )}
       </div>
