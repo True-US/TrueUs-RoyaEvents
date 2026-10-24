@@ -41,55 +41,6 @@ function resolveEventType(eventType: string | undefined): string {
     : EVENT_TYPE.EVENT;
 }
 
-async function ensureScheduleIsAvailable(
-  tx: Prisma.TransactionClient,
-  startDatetime: Date,
-  endDatetime: Date | null,
-  excludedEventId?: number,
-): Promise<void> {
-  // Serialize schedule writes so simultaneous requests cannot both pass the
-  // overlap check before either one commits.
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(728194031)::text`;
-
-  const scheduledItems = await tx.eventAdventure.findMany({
-    where: {
-      isActive: true,
-      status: { not: EVENT_STATUS.CANCELLED },
-      ...(excludedEventId === undefined
-        ? {}
-        : { id: { not: excludedEventId } }),
-    },
-    select: {
-      id: true,
-      title: true,
-      startDatetime: true,
-      endDatetime: true,
-    },
-  });
-
-  const overlaps = scheduledItems.some((item) => {
-    const itemStart = item.startDatetime.getTime();
-    const itemEnd = item.endDatetime?.getTime() ?? itemStart;
-    const requestedStart = startDatetime.getTime();
-    const requestedEnd = endDatetime?.getTime() ?? requestedStart;
-
-    if (item.endDatetime && endDatetime) {
-      return requestedStart < itemEnd && itemStart < requestedEnd;
-    }
-    if (!item.endDatetime && !endDatetime) {
-      return itemStart === requestedStart;
-    }
-    if (!item.endDatetime) {
-      return itemStart >= requestedStart && itemStart < requestedEnd;
-    }
-    return requestedStart >= itemStart && requestedStart < itemEnd;
-  });
-
-  if (overlaps) {
-    throw new EventScheduleConflictError();
-  }
-}
-
 /**
  * CREATE EVENT
  *
@@ -104,12 +55,6 @@ export async function createEventWithLocation(
     const endDatetime = payload.event.endDatetime
       ? new Date(payload.event.endDatetime)
       : null;
-    if (
-      payload.event.isActive !== false &&
-      payload.event.status !== EVENT_STATUS.CANCELLED
-    ) {
-      await ensureScheduleIsAvailable(tx, startDatetime, endDatetime);
-    }
 
     const createdLocation = await tx.location.create({
       data: {
@@ -178,17 +123,6 @@ export async function updateEventWithLocation(
     const endDatetime = payload.event.endDatetime
       ? new Date(payload.event.endDatetime)
       : null;
-    if (
-      payload.event.isActive !== false &&
-      payload.event.status !== EVENT_STATUS.CANCELLED
-    ) {
-      await ensureScheduleIsAvailable(
-        tx,
-        startDatetime,
-        endDatetime,
-        payload.id,
-      );
-    }
 
     // Available spots are not edited by hand: they follow the capacity.
     // Bookings already made stay counted (booked = old capacity - old spots).
@@ -356,13 +290,6 @@ export async function reactivateEvent(eventId: number) {
     if (!existing) {
       throw new Error("Event not found.");
     }
-
-    await ensureScheduleIsAvailable(
-      tx,
-      existing.startDatetime,
-      existing.endDatetime,
-      eventId,
-    );
 
     return tx.eventAdventure.update({
       where: { id: eventId },
