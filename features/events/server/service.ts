@@ -19,6 +19,17 @@ export class EventScheduleConflictError extends Error {
   }
 }
 
+/**
+ * Thrown when the new capacity is below what is already booked.
+ * The message is written for the admin, so it can be shown as is.
+ */
+export class EventCapacityError extends Error {
+  constructor(booked: number) {
+    super(`Capacity can't be lower than the ${booked} spots already booked.`);
+    this.name = "EventCapacityError";
+  }
+}
+
 function resolveEventType(eventType: string | undefined): string {
   // "custom_event" is what the public request form sends.
   if (eventType === EVENT_TYPE.CUSTOM_EVENT || eventType === "custom_event") {
@@ -74,8 +85,10 @@ export async function createEventWithLocation(
 
         capacity: payload.event.capacity ?? null,
 
+        // Not asked for in the form: every spot is open on a new event.
+        // null (no capacity) means unlimited.
         availableSpots:
-          payload.event.availableSpots ?? payload.event.capacity ?? 0,
+          payload.event.availableSpots ?? payload.event.capacity ?? null,
 
         // "EVENT" unless the admin created it from the Adventure tab.
         eventType: resolveEventType(payload.event.eventType),
@@ -111,6 +124,27 @@ export async function updateEventWithLocation(
       ? new Date(payload.event.endDatetime)
       : null;
 
+    // Available spots are not edited by hand: they follow the capacity.
+    // Bookings already made stay counted (booked = old capacity - old spots).
+    const current = await tx.eventAdventure.findUnique({
+      where: { id: payload.id },
+      select: { capacity: true, availableSpots: true },
+    });
+    const newCapacity: number | null = payload.event.capacity ?? null;
+    let availableSpots: number | null = payload.event.availableSpots ?? newCapacity;
+    if (
+      payload.event.availableSpots === undefined &&
+      newCapacity !== null &&
+      current?.capacity != null &&
+      current.availableSpots !== null
+    ) {
+      const booked: number = current.capacity - current.availableSpots;
+      if (newCapacity < booked) {
+        throw new EventCapacityError(booked);
+      }
+      availableSpots = newCapacity - booked;
+    }
+
     const updatedLocation = await tx.location.update({
       where: {
         id: payload.location.id,
@@ -145,8 +179,7 @@ export async function updateEventWithLocation(
 
         capacity: payload.event.capacity ?? null,
 
-        availableSpots:
-          payload.event.availableSpots ?? payload.event.capacity ?? 0,
+        availableSpots,
 
         eventType: resolveEventType(payload.event.eventType),
 

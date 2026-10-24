@@ -12,7 +12,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentProfile, isAdminRole } from "@/features/auth/current-profile";
-import { EVENT_STATUS } from "@/features/events/constants";
+import { EVENT_STATUS, EVENT_TYPE } from "@/features/events/constants";
 import { saveWithNewCover, validateCoverFile } from "@/features/events/server/cover-storage";
 import { checkEventPayload } from "@/features/events/server/event-payload";
 import { getSaveErrorMessage } from "@/features/events/server/save-error";
@@ -164,6 +164,48 @@ export async function updateEventAction(formData: FormData): Promise<EventAction
   revalidatePath("/events", "layout");
 
   return { success: true, eventId: payload.id };
+}
+
+/**
+ * Publishes or unpublishes an event or adventure. Requests (custom events)
+ * are private, so they are never published.
+ * @param eventId The event id.
+ * @param publish True to publish, false to unpublish.
+ * @returns The event id, or an error message.
+ */
+export async function setEventPublishedAction(eventId: number, publish: boolean): Promise<EventActionResult> {
+  if (!(await isCurrentUserAdmin())) {
+    return failure("Unauthorized.");
+  }
+
+  const existing: { eventType: string; status: string; coverImagePath: string | null } | null =
+    await prisma.eventAdventure.findUnique({
+      where: { id: eventId },
+      select: { eventType: true, status: true, coverImagePath: true },
+    });
+  if (!existing) {
+    return failure("Event not found.");
+  }
+  if (existing.eventType === EVENT_TYPE.CUSTOM_EVENT) {
+    return failure("Requests are private and can't be published.");
+  }
+  if (publish && existing.status === EVENT_STATUS.CANCELLED) {
+    return failure("A cancelled event can't be published.");
+  }
+
+  try {
+    await prisma.eventAdventure.update({
+      where: { id: eventId },
+      data: { status: publish ? EVENT_STATUS.PUBLISHED : EVENT_STATUS.UNPUBLISHED },
+    });
+  } catch (error) {
+    console.error("Publish event error:", error);
+    return failure(getSaveErrorMessage(error, publish ? "publish the event" : "unpublish the event"));
+  }
+
+  revalidatePath("/events", "layout");
+
+  return { success: true, eventId };
 }
 
 //---------- Helpers (not exported: only async functions may be exported here) -------------

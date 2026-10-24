@@ -1,7 +1,7 @@
 // Fails the build if a Client Component imports this file.
 import "server-only";
 
-import { EventScheduleConflictError } from "@/features/events/server/service";
+import { EventCapacityError, EventScheduleConflictError } from "@/features/events/server/service";
 import { msg } from "@/lib/validation/messages";
 
 /**
@@ -12,8 +12,8 @@ import { msg } from "@/lib/validation/messages";
  * @returns A friendly message for known database errors, else the generic fallback.
  */
 export function getSaveErrorMessage(error: unknown, action: string): string {
-  // Written for the user: the new time overlaps another event.
-  if (error instanceof EventScheduleConflictError) {
+  // Written for the user: the new time overlaps another event, or the capacity is below the bookings.
+  if (error instanceof EventScheduleConflictError || error instanceof EventCapacityError) {
     return error.message;
   }
 
