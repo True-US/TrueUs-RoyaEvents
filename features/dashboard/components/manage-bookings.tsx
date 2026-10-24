@@ -7,19 +7,19 @@ import {
   type AdminBookingEvent,
   type AdminEventBookingsPage,
 } from "@/features/dashboard/booking-types";
-import { EVENT_TYPE } from "@/features/events/constants";
+import { EVENT_TIME_ZONE, EVENT_TYPE } from "@/features/events/constants";
 
 const BOOKING_EVENTS_PAGE_SIZE = 3;
 
 const bookingDateFormatter = new Intl.DateTimeFormat("en-CA", {
   dateStyle: "medium",
   timeStyle: "short",
-  timeZone: "America/Edmonton",
+  timeZone: EVENT_TIME_ZONE,
 });
 
 const eventDateFormatter = new Intl.DateTimeFormat("en-CA", {
   dateStyle: "full",
-  timeZone: "America/Edmonton",
+  timeZone: EVENT_TIME_ZONE,
 });
 
 const moneyFormatter = new Intl.NumberFormat("en-CA", {

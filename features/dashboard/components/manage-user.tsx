@@ -10,6 +10,7 @@ import {
 
 import { FieldError, FormError, invalidInputClass } from "@/components/ui/form-feedback";
 import { PERSON_NAME_MAX, PHONE_MAX } from "@/features/auth/constants";
+import { EVENT_TIME_ZONE } from "@/features/events/constants";
 import { updateProfileSchema } from "@/features/dashboard/profile-management-schemas";
 import { getFieldErrors } from "@/lib/validation/errors";
 import { msg } from "@/lib/validation/messages";
@@ -43,7 +44,7 @@ function formatAuthDate(value: string | null, neverLabel = "—") {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
-    timeZone: "America/Edmonton",
+    timeZone: EVENT_TIME_ZONE,
   }).format(new Date(value));
 }
 function ProfileTable({
