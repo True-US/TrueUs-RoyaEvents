@@ -42,9 +42,15 @@ import {
   LOCATION_NAME_MAX,
   LOCATION_POSTAL_CODE_MAX,
   LOCATION_PROVINCE_MAX,
+  REQUEST_STATUS,
 } from "@/features/events/constants";
 // Server Actions: called like normal async functions, but run on the server.
-import { createEventAction, setEventPublishedAction, updateEventAction } from "@/features/events/server/actions";
+import {
+  createEventAction,
+  setEventPublishedAction,
+  setRequestStatusAction,
+  updateEventAction,
+} from "@/features/events/server/actions";
 import {
   eventDetailsSchema,
   eventLocationSchema,
@@ -101,7 +107,25 @@ const tagClass: Record<EventTag, string> = {
   READY: "bg-blue-100 text-blue-800",
   EXPIRED: "bg-amber-100 text-amber-800",
   CANCELLED: "bg-red-100 text-red-800",
+  PENDING: "bg-amber-100 text-amber-800",
+  APPROVED: "bg-green-100 text-green-800",
+  DECLINED: "bg-red-100 text-red-800",
 };
+
+/**
+ * One line for a location's address, skipping the parts that are empty.
+ * @param location The record's location.
+ * @returns e.g. "123 Main St, Edmonton, Alberta, T5J 0A1, Canada"; "" when there is none.
+ */
+function formatAddress(location: NonNullable<eventAdventureRecord["location"]> | null): string {
+  if (!location) {
+    return "";
+  }
+
+  return [location.address, location.city, location.province, location.postalCode, location.country]
+    .filter((part: string) => part.trim() !== "")
+    .join(", ");
+}
 
 // Choices in the form's Type dropdown. A Request is a customer's custom event.
 const typeOptions: { value: string; label: string }[] = [
@@ -765,6 +789,33 @@ export function ManageEvents() {
     }
   }
 
+  /**
+   * Approves or declines a customer request, then reloads the list.
+   * @param eventId The id of the request's event record.
+   * @param status APPROVED or DECLINED.
+   */
+  async function handleSetRequestStatus(eventId: number, status: string): Promise<void> {
+    // Declining can't be undone, so ask first.
+    if (status === REQUEST_STATUS.DECLINED && !window.confirm("Decline this request? This can't be undone.")) {
+      return;
+    }
+
+    try {
+      setMessage("");
+
+      const result: EventActionResult = await setRequestStatusAction(eventId, status);
+      if (!result.success) {
+        throw new Error(result.message);
+      }
+
+      showSuccess(status === REQUEST_STATUS.APPROVED ? "Request approved." : "Request declined.");
+
+      await loadAllRecords();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : msg.unableTo("update the request"));
+    }
+  }
+
   async function handleReactivate(
     eventId: number,
   ) {
@@ -1016,7 +1067,70 @@ export function ManageEvents() {
                             </div>
 
                             {/* Hidden until the toggle is clicked. */}
-                            {expandedIds.includes(event.id) && (
+                            {expandedIds.includes(event.id) && event.eventType === EVENT_TYPE.CUSTOM_EVENT && (
+                              // A request has three sections: the event asked for, who asked, and their message.
+                              <div className="mt-3 grid gap-x-8 gap-y-4 text-sm text-roya-slate md:grid-cols-2">
+                                <section>
+                                  <h4 className="text-xs font-semibold uppercase tracking-wider text-roya-sun-deep">
+                                    Event info
+                                  </h4>
+                                  <div className="mt-1 space-y-1">
+                                    <p>
+                                      <strong>Location:</strong> {event.location?.name ?? "No location"}
+                                    </p>
+                                    <p>
+                                      <strong>Address:</strong> {formatAddress(event.location) || "No address"}
+                                    </p>
+                                    <p>
+                                      <strong>Capacity:</strong> {event.capacity ?? "Unlimited"}
+                                    </p>
+                                    <p>
+                                      <strong>Starts:</strong> {new Date(event.startsAt).toLocaleString()}
+                                    </p>
+                                    <p>
+                                      <strong>Ends:</strong>{" "}
+                                      {event.endsAt ? new Date(event.endsAt).toLocaleString() : "Not set"}
+                                    </p>
+                                  </div>
+                                </section>
+
+                                <section>
+                                  <h4 className="text-xs font-semibold uppercase tracking-wider text-roya-sun-deep">
+                                    Contact info
+                                  </h4>
+                                  {event.contact ? (
+                                    <div className="mt-1 space-y-1">
+                                      <p>
+                                        <strong>Name:</strong> {event.contact.name}
+                                      </p>
+                                      <p>
+                                        <strong>Email:</strong>{" "}
+                                        <a className="underline" href={`mailto:${event.contact.email}`}>
+                                          {event.contact.email}
+                                        </a>
+                                      </p>
+                                      <p>
+                                        <strong>Phone:</strong>{" "}
+                                        <a className="underline" href={`tel:${event.contact.phone}`}>
+                                          {event.contact.phone}
+                                        </a>
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <p className="mt-1">No contact details.</p>
+                                  )}
+                                </section>
+
+                                <section className="md:col-span-2">
+                                  <h4 className="text-xs font-semibold uppercase tracking-wider text-roya-sun-deep">
+                                    Description
+                                  </h4>
+                                  <p className="mt-1 whitespace-pre-wrap">{event.description || "No description."}</p>
+                                </section>
+                              </div>
+                            )}
+
+                            {expandedIds.includes(event.id) && event.eventType !== EVENT_TYPE.CUSTOM_EVENT && (
                               <>
                                 <p className="mt-2 text-sm text-roya-slate">
                                   {event.summary}
@@ -1080,6 +1194,8 @@ export function ManageEvents() {
                               </button>
                             )}
 
+                            {/* A request can't use the event form; it is reviewed, not edited. */}
+                            {event.eventType !== EVENT_TYPE.CUSTOM_EVENT && (
                             <button
                               type="button"
                               onClick={() => editEvent(event)}
@@ -1102,6 +1218,31 @@ export function ManageEvents() {
                                 <path d="M14 7l3 3" />
                               </svg>
                             </button>
+                            )}
+
+                            {/* A pending request waits for the admin to approve or decline it. */}
+                            {event.eventType === EVENT_TYPE.CUSTOM_EVENT &&
+                              (event.requestStatus ?? REQUEST_STATUS.PENDING) === REQUEST_STATUS.PENDING && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={isEventExpired(event)}
+                                    title={isEventExpired(event) ? "The date has passed, so it can't be approved." : undefined}
+                                    onClick={() => handleSetRequestStatus(Number(event.id), REQUEST_STATUS.APPROVED)}
+                                    className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Approve
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetRequestStatus(Number(event.id), REQUEST_STATUS.DECLINED)}
+                                    className="rounded-md border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                                  >
+                                    Decline
+                                  </button>
+                                </>
+                              )}
 
                             {event.isActive ? (
                               <button

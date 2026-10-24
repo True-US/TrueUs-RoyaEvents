@@ -12,7 +12,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentProfile, isAdminRole } from "@/features/auth/current-profile";
-import { EVENT_STATUS, EVENT_TYPE } from "@/features/events/constants";
+import { EVENT_STATUS, EVENT_TYPE, REQUEST_STATUS } from "@/features/events/constants";
 import { saveWithNewCover, validateCoverFile } from "@/features/events/server/cover-storage";
 import { checkEventPayload } from "@/features/events/server/event-payload";
 import { getSaveErrorMessage } from "@/features/events/server/save-error";
@@ -204,6 +204,64 @@ export async function setEventPublishedAction(eventId: number, publish: boolean)
   }
 
   revalidatePath("/events", "layout");
+
+  return { success: true, eventId };
+}
+
+// Which review statuses a request may move to, from each current status.
+// DECLINED and CANCELLED are final. The values are checked here, not by the database.
+const REQUEST_TRANSITIONS: Record<string, string[]> = {
+  [REQUEST_STATUS.PENDING]: [REQUEST_STATUS.APPROVED, REQUEST_STATUS.DECLINED, REQUEST_STATUS.CANCELLED],
+  [REQUEST_STATUS.APPROVED]: [REQUEST_STATUS.CANCELLED],
+  [REQUEST_STATUS.DECLINED]: [],
+  [REQUEST_STATUS.CANCELLED]: [],
+};
+
+/**
+ * Moves a customer request to a new review status (approve, decline, cancel).
+ * @param eventId The id of the request's event record.
+ * @param status The new status: APPROVED, DECLINED or CANCELLED.
+ * @returns The event id, or an error message.
+ */
+export async function setRequestStatusAction(eventId: number, status: string): Promise<EventActionResult> {
+  if (!(await isCurrentUserAdmin())) {
+    return failure("Unauthorized.");
+  }
+
+  const existing: {
+    eventType: string;
+    requestStatus: string | null;
+    startDatetime: Date;
+    endDatetime: Date | null;
+  } | null = await prisma.eventAdventure.findUnique({
+    where: { id: eventId },
+    select: { eventType: true, requestStatus: true, startDatetime: true, endDatetime: true },
+  });
+  if (!existing) {
+    return failure("Request not found.");
+  }
+  if (existing.eventType !== EVENT_TYPE.CUSTOM_EVENT) {
+    return failure("Only requests can be approved or declined.");
+  }
+
+  // A request saved before it had a status counts as pending.
+  const current: string = existing.requestStatus ?? REQUEST_STATUS.PENDING;
+  if (!(REQUEST_TRANSITIONS[current] ?? []).includes(status)) {
+    return failure(`A ${current.toLowerCase()} request can't be changed to ${status.toLowerCase()}.`);
+  }
+  if (status === REQUEST_STATUS.APPROVED && (existing.endDatetime ?? existing.startDatetime) < new Date()) {
+    return failure("This request's date has already passed, so it can't be approved.");
+  }
+
+  try {
+    await prisma.eventAdventure.update({
+      where: { id: eventId },
+      data: { requestStatus: status },
+    });
+  } catch (error) {
+    console.error("Request status error:", error);
+    return failure(getSaveErrorMessage(error, "update the request"));
+  }
 
   return { success: true, eventId };
 }
