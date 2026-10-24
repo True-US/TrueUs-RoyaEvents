@@ -2,7 +2,7 @@
 import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
-import { EVENT_STATUS, EVENT_TYPE } from "@/features/events/constants";
+import { EVENT_STATUS, EVENT_TYPE, REQUEST_STATUS } from "@/features/events/constants";
 import { deleteEventCoverFolder } from "@/features/events/server/cover-storage";
 import { prisma } from "@/lib/supabase/prisma";
 import type {
@@ -41,55 +41,6 @@ function resolveEventType(eventType: string | undefined): string {
     : EVENT_TYPE.EVENT;
 }
 
-async function ensureScheduleIsAvailable(
-  tx: Prisma.TransactionClient,
-  startDatetime: Date,
-  endDatetime: Date | null,
-  excludedEventId?: number,
-): Promise<void> {
-  // Serialize schedule writes so simultaneous requests cannot both pass the
-  // overlap check before either one commits.
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(728194031)::text`;
-
-  const scheduledItems = await tx.eventAdventure.findMany({
-    where: {
-      isActive: true,
-      status: { not: EVENT_STATUS.CANCELLED },
-      ...(excludedEventId === undefined
-        ? {}
-        : { id: { not: excludedEventId } }),
-    },
-    select: {
-      id: true,
-      title: true,
-      startDatetime: true,
-      endDatetime: true,
-    },
-  });
-
-  const overlaps = scheduledItems.some((item) => {
-    const itemStart = item.startDatetime.getTime();
-    const itemEnd = item.endDatetime?.getTime() ?? itemStart;
-    const requestedStart = startDatetime.getTime();
-    const requestedEnd = endDatetime?.getTime() ?? requestedStart;
-
-    if (item.endDatetime && endDatetime) {
-      return requestedStart < itemEnd && itemStart < requestedEnd;
-    }
-    if (!item.endDatetime && !endDatetime) {
-      return itemStart === requestedStart;
-    }
-    if (!item.endDatetime) {
-      return itemStart >= requestedStart && itemStart < requestedEnd;
-    }
-    return requestedStart >= itemStart && requestedStart < itemEnd;
-  });
-
-  if (overlaps) {
-    throw new EventScheduleConflictError();
-  }
-}
-
 /**
  * CREATE EVENT
  *
@@ -104,12 +55,6 @@ export async function createEventWithLocation(
     const endDatetime = payload.event.endDatetime
       ? new Date(payload.event.endDatetime)
       : null;
-    if (
-      payload.event.isActive !== false &&
-      payload.event.status !== EVENT_STATUS.CANCELLED
-    ) {
-      await ensureScheduleIsAvailable(tx, startDatetime, endDatetime);
-    }
 
     const createdLocation = await tx.location.create({
       data: {
@@ -148,6 +93,16 @@ export async function createEventWithLocation(
         // "EVENT" unless the admin created it from the Adventure tab.
         eventType: resolveEventType(payload.event.eventType),
 
+        // Who asked (public request form). The server sets the review status:
+        // every request starts as PENDING.
+        contactName: payload.event.contactName ?? null,
+        contactEmail: payload.event.contactEmail ?? null,
+        contactPhone: payload.event.contactPhone ?? null,
+        requestStatus:
+          resolveEventType(payload.event.eventType) === EVENT_TYPE.CUSTOM_EVENT
+            ? REQUEST_STATUS.PENDING
+            : null,
+
         status: payload.event.status ?? "DRAFT",
 
         isActive: payload.event.isActive ?? true,
@@ -178,23 +133,12 @@ export async function updateEventWithLocation(
     const endDatetime = payload.event.endDatetime
       ? new Date(payload.event.endDatetime)
       : null;
-    if (
-      payload.event.isActive !== false &&
-      payload.event.status !== EVENT_STATUS.CANCELLED
-    ) {
-      await ensureScheduleIsAvailable(
-        tx,
-        startDatetime,
-        endDatetime,
-        payload.id,
-      );
-    }
 
     // Available spots are not edited by hand: they follow the capacity.
     // Bookings already made stay counted (booked = old capacity - old spots).
     const current = await tx.eventAdventure.findUnique({
       where: { id: payload.id },
-      select: { capacity: true, availableSpots: true },
+      select: { capacity: true, availableSpots: true, requestStatus: true },
     });
     const newCapacity: number | null = payload.event.capacity ?? null;
     let availableSpots: number | null = payload.event.availableSpots ?? newCapacity;
@@ -248,6 +192,13 @@ export async function updateEventWithLocation(
         availableSpots,
 
         eventType: resolveEventType(payload.event.eventType),
+
+        // Contact details are never edited here. A record switched to Request starts
+        // as PENDING; one switched away from Request has no request status.
+        requestStatus:
+          resolveEventType(payload.event.eventType) === EVENT_TYPE.CUSTOM_EVENT
+            ? (current?.requestStatus ?? REQUEST_STATUS.PENDING)
+            : null,
 
         status: payload.event.status ?? "DRAFT",
 
@@ -356,13 +307,6 @@ export async function reactivateEvent(eventId: number) {
     if (!existing) {
       throw new Error("Event not found.");
     }
-
-    await ensureScheduleIsAvailable(
-      tx,
-      existing.startDatetime,
-      existing.endDatetime,
-      eventId,
-    );
 
     return tx.eventAdventure.update({
       where: { id: eventId },

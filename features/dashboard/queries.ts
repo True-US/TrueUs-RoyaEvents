@@ -205,6 +205,7 @@ export async function getUserDashboardBookings(profileId: number) {
   const dashboardBookings = bookings.map((booking) => ({
     id: booking.id,
     eventTitle: booking.eventAdventure.title,
+    slug: booking.eventAdventure.slug,
     startsAt: booking.eventAdventure.startDatetime.toISOString(),
     location: booking.eventAdventure.location?.name ?? null,
     price: booking.eventAdventure.price?.toString() ?? null,

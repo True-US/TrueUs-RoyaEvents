@@ -10,7 +10,6 @@ const links = [
   { href: "/events", label: "Events" },
   { href: "/adventures", label: "Adventures" },
   { href: "/custom-event", label: "Custom event" },
-  { href: "/tickets", label: "Tickets" },
 ];
 
 export function Header() {
@@ -67,7 +66,9 @@ export function Header() {
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
 
-    const term: string = String(new FormData(event.currentTarget).get("q") ?? "").trim();
+    const term: string = String(
+      new FormData(event.currentTarget).get("q") ?? "",
+    ).trim();
     if (!term) {
       return;
     }

@@ -107,6 +107,13 @@ model EventAdventure {
   eventType      String  @map("event_type") @db.VarChar(50)
   isActive       Boolean @default(true) @map("is_active")
 
+  // Customer requests only (event_type CUSTOM_EVENT); null on events and adventures.
+  // requestStatus: PENDING, APPROVED, DECLINED or CANCELLED (see REQUEST_STATUS).
+  contactName   String? @map("contact_name") @db.VarChar(200)
+  contactEmail  String? @map("contact_email") @db.VarChar(255)
+  contactPhone  String? @map("contact_phone") @db.VarChar(50)
+  requestStatus String? @map("request_status") @db.VarChar(20)
+
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   createdBy String?   @map("created_by") @db.VarChar(255)

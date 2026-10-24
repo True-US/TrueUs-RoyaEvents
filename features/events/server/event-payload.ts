@@ -5,6 +5,7 @@ import { EVENT_STATUS } from "@/features/events/constants";
 import {
   eventDetailsSchema,
   eventLocationSchema,
+  requestContactSchema,
   validateEventRules,
 } from "@/features/events/schemas";
 import type { CreateEventInput, CreateEventLocationInput } from "@/features/events/types";
@@ -88,15 +89,38 @@ export function checkEventPayload(
 }
 
 /**
+ * Checks the contact details of a public request.
+ * @param event The event, already checked by checkEventPayload.
+ * @returns The trimmed contact fields, or the first error message.
+ */
+export function checkRequestContact(
+  event: CreateEventInput,
+):
+  | { contact: { contactName: string; contactEmail: string; contactPhone: string }; error?: never }
+  | { contact?: never; error: string } {
+  const result: ReturnType<typeof requestContactSchema.safeParse> = requestContactSchema.safeParse(event);
+  if (!result.success) {
+    return { error: getFirstError(result.error, msg.invalid("Contact details")) };
+  }
+
+  return { contact: result.data };
+}
+
+/**
  * Limits an event sent by someone who isn't an admin (the public request forms)
  * to what a request may set: it always lands as an active draft, with no price.
  * @param event The event, already checked by checkEventPayload.
+ * @param contact The contact details, already checked by checkRequestContact.
  * @returns The event with every admin-only value replaced.
  */
-export function toPublicRequestEvent(event: CreateEventInput): CreateEventInput {
+export function toPublicRequestEvent(
+  event: CreateEventInput,
+  contact: { contactName: string; contactEmail: string; contactPhone: string },
+): CreateEventInput {
   return {
     // Kept so the request is saved as a custom event, not a plain event.
     eventType: event.eventType,
+    ...contact,
     title: event.title,
     slug: event.slug,
     shortDescription: event.shortDescription,

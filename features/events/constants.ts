@@ -22,6 +22,14 @@ export const EVENT_TYPE = {
   CUSTOM_EVENT: "CUSTOM_EVENT",
 } as const;
 
+// Review status of a customer request (event_adventure.request_status).
+export const REQUEST_STATUS = {
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  DECLINED: "DECLINED",
+  CANCELLED: "CANCELLED",
+} as const;
+
 // Union of the type values: "EVENT" | "ADVENTURE" | "CUSTOM_EVENT".
 export type EventType = (typeof EVENT_TYPE)[keyof typeof EVENT_TYPE];
 

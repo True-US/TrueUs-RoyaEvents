@@ -57,6 +57,13 @@ export const customEventStep1Schema = z.object({
   phone: requiredPhoneField(),
 });
 
+/** Who sent a customer request. Checked again on the server, which sets the request status itself. */
+export const requestContactSchema = z.object({
+  contactName: textField("Name", 200, 2),
+  contactEmail: emailField(),
+  contactPhone: requiredPhoneField(),
+});
+
 export const customEventStep2Schema = z
   .object({
     title: textField("Event name", EVENT_TITLE_MAX, 3),
