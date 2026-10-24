@@ -6,7 +6,6 @@ import { notFound } from "next/navigation";
 import {
   formatEventDateLong,
   formatPrice,
-  formatSpotsLeft,
   formatVenueLines,
   getEventState,
   type EventState,
@@ -55,7 +54,6 @@ export default async function EventDetailsPage({ params }: PageProps<"/events/[s
   }
 
   const state: EventState = getEventState(event);
-  const spotsLeft: string | null = formatSpotsLeft(event);
   const notice: string | undefined = stateNotices[state];
 
   return (
@@ -134,9 +132,6 @@ export default async function EventDetailsPage({ params }: PageProps<"/events/[s
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-wider text-roya-slate">Price</h2>
             <p className="mt-1 text-2xl font-semibold text-roya-ink">{formatPrice(event.price)}</p>
-            {spotsLeft && state === "open" && (
-              <p className="mt-1 text-sm text-roya-slate">{spotsLeft}</p>
-            )}
           </div>
 
           {state === "open" && (
