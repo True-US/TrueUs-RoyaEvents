@@ -76,7 +76,7 @@ const EVENTS_PAGE_SIZE: number = 10;
 const typeTabs: { value: string; label: string }[] = [
   { value: EVENT_TYPE.EVENT, label: "Event" },
   { value: EVENT_TYPE.ADVENTURE, label: "Adventure" },
-  { value: EVENT_TYPE.CUSTOM_EVENT, label: "Request" },
+  { value: EVENT_TYPE.CUSTOM_EVENT, label: "Private" },
 ];
 
 type SortBy = "name" | "date" | "status";
@@ -128,7 +128,7 @@ function formatAddress(location: NonNullable<eventAdventureRecord["location"]> |
     .join(", ");
 }
 
-// Choices in the event form's Type dropdown. Requests (customer custom events)
+// Choices in the event form's Type dropdown. Requests (customer private events)
 // have their own form, so they are not offered here.
 const typeOptions: { value: string; label: string }[] = [
   { value: EVENT_TYPE.EVENT, label: "Event" },
@@ -930,7 +930,7 @@ export function ManageEvents() {
               onClick={openCreateForm}
               className="rounded-md bg-roya-sun px-5 py-2.5 text-sm font-bold text-roya-ink hover:opacity-90"
             >
-              {activeType === EVENT_TYPE.CUSTOM_EVENT ? "New Request" : "New Event/Adventure"}
+              {activeType === EVENT_TYPE.CUSTOM_EVENT ? "New Private" : "New Event/Adventure"}
             </button>
 
             {/* Settings dropdown (a native <details>, so no open/close state). */}
@@ -1208,28 +1208,28 @@ export function ManageEvents() {
 
                             {/* A request can't use the event form; it is reviewed, not edited. */}
                             {event.eventType !== EVENT_TYPE.CUSTOM_EVENT && (
-                            <button
-                              type="button"
-                              onClick={() => editEvent(event)}
-                              aria-label="Edit"
-                              title="Edit"
-                              className="rounded-md border border-roya-slate/30 p-2 text-roya-ink hover:bg-roya-slate/5"
-                            >
-                              {/* Pen. */}
-                              <svg
-                                aria-hidden="true"
-                                className="h-5 w-5"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="1.8"
-                                viewBox="0 0 24 24"
+                              <button
+                                type="button"
+                                onClick={() => editEvent(event)}
+                                aria-label="Edit"
+                                title="Edit"
+                                className="rounded-md border border-roya-slate/30 p-2 text-roya-ink hover:bg-roya-slate/5"
                               >
-                                <path d="M4 20l1-4L16 5l3 3L8 19l-4 1z" />
-                                <path d="M14 7l3 3" />
-                              </svg>
-                            </button>
+                                {/* Pen. */}
+                                <svg
+                                  aria-hidden="true"
+                                  className="h-5 w-5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="1.8"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M4 20l1-4L16 5l3 3L8 19l-4 1z" />
+                                  <path d="M14 7l3 3" />
+                                </svg>
+                              </button>
                             )}
 
                             {/* A pending request waits for the admin to approve or decline it. */}

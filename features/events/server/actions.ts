@@ -167,7 +167,7 @@ export async function updateEventAction(formData: FormData): Promise<EventAction
 }
 
 /**
- * Publishes or unpublishes an event or adventure. Requests (custom events)
+ * Publishes or unpublishes an event or adventure. Requests (private events)
  * are private, so they are never published.
  * @param eventId The event id.
  * @param publish True to publish, false to unpublish.
