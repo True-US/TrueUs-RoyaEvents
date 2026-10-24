@@ -80,33 +80,30 @@ export function CoverInput({
         Cover Image
       </label>
 
-      <div
-        className={`relative mt-1 aspect-[2/1] overflow-hidden rounded-md border bg-roya-slate/10 ${
-          message ? "border-red-500" : "border-roya-slate/30"
-        }`}
-      >
-        {shownUrl ? (
-          // A plain <img>: previews are local data URLs, which next/image can't optimise.
-          // eslint-disable-next-line @next/next/no-img-element
+      {/* No cover yet: just the button below, no empty preview box. */}
+      {shownUrl && (
+        <div
+          className={`relative mt-1 aspect-[2/1] overflow-hidden rounded-md border bg-roya-slate/10 ${
+            message ? "border-red-500" : "border-roya-slate/30"
+          }`}
+        >
+          {/* A plain <img>: previews are local data URLs, which next/image can't optimise. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img alt="Cover preview" className="h-full w-full object-cover" src={shownUrl} />
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-roya-slate">
-            No cover yet
-          </div>
-        )}
 
-        {newPreviewUrl && (
-          <span className="absolute left-2 top-2 rounded bg-roya-sun px-2 py-0.5 text-xs font-semibold text-roya-ink">
-            New, saved when you save the event
-          </span>
-        )}
+          {newPreviewUrl && (
+            <span className="absolute left-2 top-2 rounded bg-roya-sun px-2 py-0.5 text-xs font-semibold text-roya-ink">
+              New, saved when you save the event
+            </span>
+          )}
 
-        {preparing && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-semibold text-roya-ink">
-            Preparing image…
-          </div>
-        )}
-      </div>
+          {preparing && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-semibold text-roya-ink">
+              Preparing image…
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {/* The real input is hidden; the label is styled as the button. */}
@@ -128,6 +125,11 @@ export function CoverInput({
           onChange={handleSelect}
           type="file"
         />
+
+        {/* With no preview box yet, show the progress here. */}
+        {preparing && !shownUrl && (
+          <span className="text-sm font-semibold text-roya-ink">Preparing image…</span>
+        )}
 
         {newPreviewUrl && (
           <button

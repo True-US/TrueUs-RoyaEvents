@@ -25,14 +25,11 @@ import type {
 } from "@/features/events/types";
 import { prisma } from "@/lib/supabase/prisma";
 
-// Shown when trying to publish an event that has no cover.
-const COVER_REQUIRED_MESSAGE: string = "A cover image is required to publish. Add one, or save as a draft.";
-
 /**
- * Creates an event, and its cover when one is attached.
+ * Creates an event, and its cover when one is attached (the cover is optional).
  * With a cover, the event is first saved as a draft: the cover's storage path
- * needs the new event's id, and a published event must never exist without
- * its cover. The requested status is applied together with the cover.
+ * needs the new event's id, and a published event must never point at a cover
+ * that failed to upload. The requested status is applied together with the cover.
  * @param formData "payload" (event + location JSON) and optional "cover" (WebP file).
  * @returns The new event id; coverError when the event saved but the cover didn't.
  */
@@ -60,10 +57,6 @@ export async function createEventAction(formData: FormData): Promise<EventAction
   }
 
   const requestedStatus: string = checked.event.status ?? EVENT_STATUS.DRAFT;
-  if (requestedStatus === EVENT_STATUS.PUBLISHED && !cover) {
-    return failure(COVER_REQUIRED_MESSAGE);
-  }
-
   // 1. Create the event (as a draft when a cover still has to be uploaded).
   let eventId: number;
   try {
@@ -145,12 +138,6 @@ export async function updateEventAction(formData: FormData): Promise<EventAction
   });
   if (!existing) {
     return failure("Event not found.");
-  }
-
-  // A seed event's Picsum URL counts as a cover too.
-  const status: string = checked.event.status ?? EVENT_STATUS.DRAFT;
-  if (status === EVENT_STATUS.PUBLISHED && !cover && !existing.coverImagePath) {
-    return failure(COVER_REQUIRED_MESSAGE);
   }
 
   try {
