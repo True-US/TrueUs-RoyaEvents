@@ -16,9 +16,6 @@ export function Footer() {
           <p>&copy; Roya Events &amp; Adventures</p>
         </div>
         <div className="flex gap-6 font-display text-base font-semibold uppercase tracking-wider">
-          <Link className="hover:text-roya-sun" href="/private-adventure">
-            Private adventure
-          </Link>
           <Link className="hover:text-roya-sun" href="/contact">
             Contact
           </Link>

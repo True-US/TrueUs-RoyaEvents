@@ -96,6 +96,6 @@ export const PRICE_MAX: number = 99999999.99;
 // Stripe can't charge less than this, so a paid ticket costs at least this much.
 export const MIN_PAID_PRICE: number = 0.5;
 
-// Custom event / contact / private adventure requests.
+// Private event / contact / private adventure requests.
 export const REQUEST_GUESTS_MAX: number = 100000;
 export const REQUEST_MESSAGE_MAX: number = 2000;

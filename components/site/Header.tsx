@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/browser";
 const links = [
   { href: "/events", label: "Events" },
   { href: "/adventures", label: "Adventures" },
-  { href: "/custom-event", label: "Custom event" },
+  { href: "/custom-event", label: "Private event" },
 ];
 
 export function Header() {
