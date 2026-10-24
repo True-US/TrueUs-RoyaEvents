@@ -65,7 +65,10 @@ Never commit `.env.local` or expose the service-role key in browser code. Enviro
 Ticket payments use Stripe-hosted Checkout in CAD. Put the Stripe **test-mode**
 secret key in `STRIPE_SECRET_KEY` in `.env.local`; the secret key stays on the
 server and the hosted checkout flow does not need the publishable key.
-`NEXT_PUBLIC_APP_URL` should be `http://localhost:3000` for local development.
+Set `NEXT_PUBLIC_APP_URL=http://localhost:3000` in `.env.local` for development.
+In Vercel, set `PRD_NEXT_PUBLIC_APP_URL` to the deployed HTTPS origin
+(`https://roya-events-adventures.vercel.app`). Checkout selects the local URL in
+development and the production URL in other environments.
 
 Apply the booking schema migration before testing checkout:
 

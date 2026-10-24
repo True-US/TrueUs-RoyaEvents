@@ -9,6 +9,8 @@ import {
 } from "@/features/dashboard/booking-types";
 import { EVENT_TYPE } from "@/features/events/constants";
 
+const BOOKING_EVENTS_PAGE_SIZE = 3;
+
 const bookingDateFormatter = new Intl.DateTimeFormat("en-CA", {
   dateStyle: "medium",
   timeStyle: "short",
@@ -50,6 +52,7 @@ export function ManageBookings() {
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [bookingsError, setBookingsError] = useState<string | null>(null);
   const [retryEvents, setRetryEvents] = useState(0);
+  const [eventListPage, setEventListPage] = useState(1);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -165,6 +168,16 @@ export function ManageBookings() {
 
   const selectedEvent =
     events?.find((event) => event.id === selectedEventId) ?? null;
+  const totalEventListPages = Math.max(
+    1,
+    Math.ceil((events?.length ?? 0) / BOOKING_EVENTS_PAGE_SIZE),
+  );
+  const currentEventListPage = Math.min(eventListPage, totalEventListPages);
+  const pagedEvents =
+    events?.slice(
+      (currentEventListPage - 1) * BOOKING_EVENTS_PAGE_SIZE,
+      currentEventListPage * BOOKING_EVENTS_PAGE_SIZE,
+    ) ?? [];
 
   return (
     <div className="mt-8 space-y-8">
@@ -227,43 +240,75 @@ export function ManageBookings() {
         )}
 
         {!eventsLoading && !eventsError && events && events.length > 0 && (
-          <ul className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {events.map((event) => {
-              const isSelected = selectedEventId === event.id;
-              return (
-                <li key={event.id}>
+          <>
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {pagedEvents.map((event) => {
+                const isSelected = selectedEventId === event.id;
+                return (
+                  <li key={event.id}>
+                    <button
+                      aria-pressed={isSelected}
+                      className={`h-full w-full rounded-lg border p-4 text-left transition-colors ${
+                        isSelected
+                          ? "border-roya-sun bg-roya-sun/10 ring-1 ring-roya-sun"
+                          : "border-roya-slate/20 bg-white hover:border-roya-sun"
+                      }`}
+                      onClick={() => selectEvent(event.id)}
+                      type="button"
+                    >
+                      <span className="text-xs font-semibold uppercase tracking-[0.14em] text-roya-sun-deep">
+                        {eventTypeLabel(event.eventType)}
+                      </span>
+                      <span className="mt-1 block font-display text-lg font-bold uppercase text-roya-ink">
+                        {event.title}
+                      </span>
+                      <span className="mt-2 block text-sm text-roya-slate">
+                        {eventDateFormatter.format(
+                          new Date(event.startDatetime),
+                        )}
+                      </span>
+                      <span className="mt-1 block text-sm text-roya-slate">
+                        {event.location
+                          ? `${event.location.name} · ${event.location.city}, ${event.location.province}`
+                          : "Location not specified"}
+                      </span>
+                      <span className="mt-3 block text-sm font-medium text-roya-ink">
+                        {event.spotsPurchased} spots purchased
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            {totalEventListPages > 1 && (
+              <nav
+                aria-label="Event pages"
+                className="mt-4 flex flex-wrap items-center justify-between gap-3"
+              >
+                <p className="text-sm text-roya-slate">
+                  Page {currentEventListPage} of {totalEventListPages}
+                </p>
+                <div className="flex gap-2">
                   <button
-                    aria-pressed={isSelected}
-                    className={`h-full w-full rounded-lg border p-4 text-left transition-colors ${
-                      isSelected
-                        ? "border-roya-sun bg-roya-sun/10 ring-1 ring-roya-sun"
-                        : "border-roya-slate/20 bg-white hover:border-roya-sun"
-                    }`}
-                    onClick={() => selectEvent(event.id)}
+                    className="rounded-md border border-roya-slate/30 px-4 py-2 text-sm font-medium text-roya-ink hover:bg-roya-slate/5 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={currentEventListPage <= 1}
+                    onClick={() => setEventListPage(currentEventListPage - 1)}
                     type="button"
                   >
-                    <span className="text-xs font-semibold uppercase tracking-[0.14em] text-roya-sun-deep">
-                      {eventTypeLabel(event.eventType)}
-                    </span>
-                    <span className="mt-1 block font-display text-lg font-bold uppercase text-roya-ink">
-                      {event.title}
-                    </span>
-                    <span className="mt-2 block text-sm text-roya-slate">
-                      {eventDateFormatter.format(new Date(event.startDatetime))}
-                    </span>
-                    <span className="mt-1 block text-sm text-roya-slate">
-                      {event.location
-                        ? `${event.location.name} · ${event.location.city}, ${event.location.province}`
-                        : "Location not specified"}
-                    </span>
-                    <span className="mt-3 block text-sm font-medium text-roya-ink">
-                      {event.spotsPurchased} spots purchased
-                    </span>
+                    Previous
                   </button>
-                </li>
-              );
-            })}
-          </ul>
+                  <button
+                    className="rounded-md border border-roya-slate/30 px-4 py-2 text-sm font-medium text-roya-ink hover:bg-roya-slate/5 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={currentEventListPage >= totalEventListPages}
+                    onClick={() => setEventListPage(currentEventListPage + 1)}
+                    type="button"
+                  >
+                    Next
+                  </button>
+                </div>
+              </nav>
+            )}
+          </>
         )}
       </section>
 

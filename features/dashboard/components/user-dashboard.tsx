@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 type DashboardBooking = {
   id: number;
   eventTitle: string;
+  slug: string;
   startsAt: string;
   location: string | null;
   status: string;
@@ -109,7 +111,12 @@ export function UserDashboard({
                       {booking.location ? ` · ${booking.location}` : ""}
                     </p>
                     <h2 className="mt-1 font-display text-2xl font-bold uppercase text-roya-ink">
-                      {booking.eventTitle}
+                      <Link
+                        className="hover:text-roya-sun-deep"
+                        href={`/events/${booking.slug}`}
+                      >
+                        {booking.eventTitle}
+                      </Link>
                     </h2>
                     <p className="mt-1 text-sm capitalize text-roya-slate">
                       {booking.quantity} ticket
@@ -147,7 +154,12 @@ export function UserDashboard({
                       Order #{booking.id} · {formatDate(booking.orderedAt)}
                     </p>
                     <h2 className="mt-1 font-display text-xl font-bold uppercase text-roya-ink">
-                      {booking.eventTitle}
+                      <Link
+                        className="hover:text-roya-sun-deep"
+                        href={`/events/${booking.slug}`}
+                      >
+                        {booking.eventTitle}
+                      </Link>
                     </h2>
                     <p className="mt-1 text-sm capitalize text-roya-slate">
                       {booking.quantity} ticket
