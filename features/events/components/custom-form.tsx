@@ -173,12 +173,11 @@ export function CustomEventForm({ kind, submitLabel }: CustomEventFormProps) {
           title: formData.title,
           slug: makeSlug(formData.title, true),
           shortDescription: formData.title,
-          description: [
-            `${formData.firstName} ${formData.lastName} — ${formData.email} — ${formData.phone}`,
-            formData.message.trim(),
-          ]
-            .filter(Boolean)
-            .join("\n\n"),
+          // The message only: who asked travels in the contact fields.
+          description: formData.message.trim(),
+          contactName: `${formData.firstName} ${formData.lastName}`,
+          contactEmail: formData.email,
+          contactPhone: formData.phone,
           startDatetime: start.toISOString(),
           endDatetime: end.toISOString(),
           capacity: Number(formData.numberOfGuests),

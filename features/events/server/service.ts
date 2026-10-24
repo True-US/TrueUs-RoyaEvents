@@ -2,7 +2,7 @@
 import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
-import { EVENT_STATUS, EVENT_TYPE } from "@/features/events/constants";
+import { EVENT_STATUS, EVENT_TYPE, REQUEST_STATUS } from "@/features/events/constants";
 import { deleteEventCoverFolder } from "@/features/events/server/cover-storage";
 import { prisma } from "@/lib/supabase/prisma";
 import type {
@@ -93,6 +93,16 @@ export async function createEventWithLocation(
         // "EVENT" unless the admin created it from the Adventure tab.
         eventType: resolveEventType(payload.event.eventType),
 
+        // Who asked (public request form). The server sets the review status:
+        // every request starts as PENDING.
+        contactName: payload.event.contactName ?? null,
+        contactEmail: payload.event.contactEmail ?? null,
+        contactPhone: payload.event.contactPhone ?? null,
+        requestStatus:
+          resolveEventType(payload.event.eventType) === EVENT_TYPE.CUSTOM_EVENT
+            ? REQUEST_STATUS.PENDING
+            : null,
+
         status: payload.event.status ?? "DRAFT",
 
         isActive: payload.event.isActive ?? true,
@@ -128,7 +138,7 @@ export async function updateEventWithLocation(
     // Bookings already made stay counted (booked = old capacity - old spots).
     const current = await tx.eventAdventure.findUnique({
       where: { id: payload.id },
-      select: { capacity: true, availableSpots: true },
+      select: { capacity: true, availableSpots: true, requestStatus: true },
     });
     const newCapacity: number | null = payload.event.capacity ?? null;
     let availableSpots: number | null = payload.event.availableSpots ?? newCapacity;
@@ -182,6 +192,13 @@ export async function updateEventWithLocation(
         availableSpots,
 
         eventType: resolveEventType(payload.event.eventType),
+
+        // Contact details are never edited here. A record switched to Request starts
+        // as PENDING; one switched away from Request has no request status.
+        requestStatus:
+          resolveEventType(payload.event.eventType) === EVENT_TYPE.CUSTOM_EVENT
+            ? (current?.requestStatus ?? REQUEST_STATUS.PENDING)
+            : null,
 
         status: payload.event.status ?? "DRAFT",
 
