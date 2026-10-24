@@ -29,6 +29,7 @@ import {
 } from "@/features/events/api";
 import { FieldError, FormError, FormSuccess, invalidInputClass } from "@/components/ui/form-feedback";
 import { CoverInput } from "@/features/events/components/cover-input";
+import { RequestFormDialog } from "@/features/dashboard/components/request-form";
 import {
   EVENT_DESCRIPTION_MAX,
   EVENT_SHORT_DESCRIPTION_MAX,
@@ -127,11 +128,11 @@ function formatAddress(location: NonNullable<eventAdventureRecord["location"]> |
     .join(", ");
 }
 
-// Choices in the form's Type dropdown. A Request is a customer's custom event.
+// Choices in the event form's Type dropdown. Requests (customer custom events)
+// have their own form, so they are not offered here.
 const typeOptions: { value: string; label: string }[] = [
   { value: EVENT_TYPE.EVENT, label: "Event" },
   { value: EVENT_TYPE.ADVENTURE, label: "Adventure" },
-  { value: EVENT_TYPE.CUSTOM_EVENT, label: "Request" },
 ];
 
 type EventForm = {
@@ -282,6 +283,9 @@ export function ManageEvents() {
   const [activeType, setActiveType] = useState<string>(EVENT_TYPE.EVENT);
   const [page, setPage] = useState<number>(1);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
+  // The request popup. A new key on each open gives it an empty form.
+  const [isRequestFormOpen, setIsRequestFormOpen] = useState<boolean>(false);
+  const [requestFormKey, setRequestFormKey] = useState<number>(0);
   // List settings (the Settings dropdown above the list).
   const [hideExpired, setHideExpired] = useState<boolean>(true);
   const [sortBy, setSortBy] = useState<SortBy>("date");
@@ -341,6 +345,14 @@ export function ManageEvents() {
    * Opens the popup with an empty form for a new event.
    */
   function openCreateForm(): void {
+    // The Request tab has its own form (contact details, no price or cover).
+    if (activeType === EVENT_TYPE.CUSTOM_EVENT) {
+      setMessage("");
+      setRequestFormKey((key: number) => key + 1);
+      setIsRequestFormOpen(true);
+      return;
+    }
+
     resetForm();
     // New records take the type of the tab that is open.
     setForm((current: EventForm) => ({ ...current, eventType: activeType }));
@@ -918,7 +930,7 @@ export function ManageEvents() {
               onClick={openCreateForm}
               className="rounded-md bg-roya-sun px-5 py-2.5 text-sm font-bold text-roya-ink hover:opacity-90"
             >
-              New Event/Adventure
+              {activeType === EVENT_TYPE.CUSTOM_EVENT ? "New Request" : "New Event/Adventure"}
             </button>
 
             {/* Settings dropdown (a native <details>, so no open/close state). */}
@@ -1303,6 +1315,17 @@ export function ManageEvents() {
 
 
       </div>
+
+      <RequestFormDialog
+        key={requestFormKey}
+        open={isRequestFormOpen}
+        onClose={() => setIsRequestFormOpen(false)}
+        onCreated={(text: string) => {
+          setIsRequestFormOpen(false);
+          showSuccess(text);
+          loadAllRecords();
+        }}
+      />
 
       {/* Create/edit popup. Shown and hidden by the isFormOpen effect (showModal/close). */}
       <dialog
