@@ -6,6 +6,7 @@ import {
 } from "@/features/auth/current-profile";
 
 import type {
+  CreateEventInput,
   CreateEventWithLocationInput,
   UpdateEventWithLocationInput,
 } from "@/features/events/types";
@@ -18,7 +19,7 @@ import {
 } from "@/features/events/server/service";
 import { getAdminEvents as getAllEventAndAdventure } from "@/features/events/server/queries";
 // Same checks as the admin server actions (features/events/server/actions.ts).
-import { checkEventPayload, toPublicRequestEvent } from "@/features/events/server/event-payload";
+import { checkEventPayload, checkRequestContact, toPublicRequestEvent } from "@/features/events/server/event-payload";
 import { getSaveErrorMessage } from "@/features/events/server/save-error";
 import { msg } from "@/lib/validation/messages";
 
@@ -123,9 +124,22 @@ export async function POST(request: Request) {
       );
     }
 
+    // A public request must say who it is from; that is what the admin replies to.
+    let event: CreateEventInput = checked.event;
+    if (isPublicRequest) {
+      const contact: ReturnType<typeof checkRequestContact> = checkRequestContact(checked.event);
+      if (contact.error !== undefined) {
+        return NextResponse.json(
+          { success: false, message: contact.error },
+          { status: 400 },
+        );
+      }
+      event = toPublicRequestEvent(checked.event, contact.contact);
+    }
+
     const result = await createEventWithLocation({
       location: checked.location,
-      event: isPublicRequest ? toPublicRequestEvent(checked.event) : checked.event,
+      event,
     });
 
     return NextResponse.json(result, {

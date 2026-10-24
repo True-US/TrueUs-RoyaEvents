@@ -244,6 +244,15 @@ export async function getAdminEvents(): Promise<eventAdventureRecord[]> {
     availableSpots: event.availableSpots,
     eventType: event.eventType,
     isActive: event.isActive,
+    contact:
+      event.contactName || event.contactEmail || event.contactPhone
+        ? {
+            name: event.contactName ?? "",
+            email: event.contactEmail ?? "",
+            phone: event.contactPhone ?? "",
+          }
+        : null,
+    requestStatus: event.requestStatus,
     coverUrl: getCoverUrl(event.coverImagePath),
 
     location: event.location

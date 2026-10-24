@@ -63,6 +63,9 @@ export type eventAdventureRecord = {
   availableSpots: number | null;
   eventType: string;
   isActive: boolean;
+  // Customer requests only: who asked, and where the review stands. Null otherwise.
+  contact: { name: string; email: string; phone: string } | null;
+  requestStatus: string | null;
   coverUrl: string | null; // Shown in the edit popup; null when there is no cover.
   location: {
     id: number;
@@ -110,6 +113,10 @@ export type CreateEventInput = {
   isActive?: boolean;
   createdBy?: string | null;
   updatedBy?: string | null;
+  // Sent by the public request form only. The request status is set by the server.
+  contactName?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
   // Set only by the server after a cover upload; never sent by the form.
   coverImagePath?: string | null;
 };
