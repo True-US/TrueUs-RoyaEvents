@@ -192,9 +192,6 @@ export async function setEventPublishedAction(eventId: number, publish: boolean)
   if (publish && existing.status === EVENT_STATUS.CANCELLED) {
     return failure("A cancelled event can't be published.");
   }
-  if (publish && !existing.coverImagePath) {
-    return failure(COVER_REQUIRED_MESSAGE);
-  }
 
   try {
     await prisma.eventAdventure.update({
