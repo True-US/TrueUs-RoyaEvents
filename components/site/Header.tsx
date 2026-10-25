@@ -18,6 +18,7 @@ export function Header() {
   const [firstName, setFirstName] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -74,6 +75,7 @@ export function Header() {
     }
 
     setIsSearchOpen(false);
+    setIsMenuOpen(false);
     router.push(`/search?q=${encodeURIComponent(term)}`);
   }
 
@@ -89,6 +91,7 @@ export function Header() {
 
     setIsLoggedIn(false);
     setFirstName(null);
+    setIsMenuOpen(false);
 
     router.replace("/login");
     router.refresh();
@@ -96,7 +99,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b-4 border-roya-sun bg-roya-slate">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-10 gap-y-2 px-6 py-2 sm:px-10">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-6 py-2 sm:px-10 md:gap-x-10">
         <Link href="/">
           <Image
             alt="Roya Event & Adventure"
@@ -107,9 +110,96 @@ export function Header() {
             width={260}
           />
         </Link>
+        <button
+          aria-controls="mobile-menu"
+          aria-expanded={isMenuOpen}
+          aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+          className="ml-auto text-white hover:text-roya-sun md:hidden"
+          onClick={() => setIsMenuOpen((open) => !open)}
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            fill="none"
+            height="28"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+            width="28"
+          >
+            {isMenuOpen ? (
+              <path d="M6 6l12 12M18 6L6 18" />
+            ) : (
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            )}
+          </svg>
+        </button>
+        {isMenuOpen && (
+          <nav
+            aria-label="Mobile navigation"
+            className="flex basis-full flex-col font-display text-lg font-semibold uppercase tracking-wider text-white/80 md:hidden"
+            id="mobile-menu"
+          >
+            <form
+              action="/search"
+              className="pb-3 normal-case"
+              onSubmit={handleSearchSubmit}
+              role="search"
+            >
+              <input
+                aria-label="Search events and adventures"
+                className="w-full border border-white/30 bg-transparent px-3 py-2 text-base font-normal tracking-normal text-white placeholder:text-white/50 focus:border-roya-sun focus:outline-none"
+                maxLength={100}
+                name="q"
+                placeholder="Search..."
+                type="search"
+              />
+            </form>
+            {links.map((link) => (
+              <Link
+                className="border-t border-white/10 py-3 hover:text-roya-sun"
+                href={link.href}
+                key={link.href}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
+            {isLoggedIn ? (
+              <>
+                <Link
+                  className="border-t border-white/10 py-3 hover:text-roya-sun"
+                  href="/dashboard"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Dashboard
+                </Link>
+                <span className="border-t border-white/10 py-3 text-roya-sun">
+                  Hi, {firstName ?? "User"}
+                </span>
+                <button
+                  className="border-t border-white/10 py-3 text-left hover:text-roya-sun"
+                  onClick={handleLogout}
+                  type="button"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <Link
+                className="border-t border-white/10 py-3 hover:text-roya-sun"
+                href="/login"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Login
+              </Link>
+            )}
+          </nav>
+        )}
         <nav
           aria-label="Primary navigation"
-          className="flex flex-1 items-center gap-5 font-display text-lg font-semibold uppercase tracking-wider text-white/80"
+          className="hidden flex-1 items-center gap-5 font-display text-lg font-semibold uppercase tracking-wider text-white/80 md:flex"
         >
           {links.map((link) => (
             <Link
