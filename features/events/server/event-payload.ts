@@ -113,12 +113,12 @@ export function checkRequestContact(
  * @param contact The contact details, already checked by checkRequestContact.
  * @returns The event with every admin-only value replaced.
  */
-export function toPublicRequestEvent(
+export function toPrivateRequestEvent(
   event: CreateEventInput,
   contact: { contactName: string; contactEmail: string; contactPhone: string },
 ): CreateEventInput {
   return {
-    // Kept so the request is saved as a custom event, not a plain event.
+    // Kept so the request is saved as a private event, not a plain event.
     eventType: event.eventType,
     ...contact,
     title: event.title,

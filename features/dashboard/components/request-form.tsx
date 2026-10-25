@@ -253,7 +253,7 @@ export function RequestFormDialog({ open, onClose, onCreated }: RequestFormDialo
     >
       <div className="flex shrink-0 items-center justify-between gap-4 border-b border-roya-slate/20 bg-white px-6 py-4">
         <h2 id="request-form-title" className="font-display text-3xl font-bold text-roya-ink">
-          New Request
+          New Private
         </h2>
 
         <button

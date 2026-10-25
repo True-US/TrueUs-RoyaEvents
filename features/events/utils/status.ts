@@ -4,7 +4,7 @@ import type { eventAdventureRecord } from "@/features/events/types";
 
 // What the admin list shows next to a record. A live record has no tag: its
 // Unpublish button says it is live.
-// Requests (customer custom events) show their review status instead of DRAFT/READY.
+// Requests (customer private events) show their review status instead of DRAFT/READY.
 export type EventTag = "DRAFT" | "READY" | "EXPIRED" | "CANCELLED" | "PENDING" | "APPROVED" | "DECLINED";
 
 /**
