@@ -65,7 +65,10 @@ Never commit `.env.local` or expose the service-role key in browser code. Enviro
 Ticket payments use Stripe-hosted Checkout in CAD. Put the Stripe **test-mode**
 secret key in `STRIPE_SECRET_KEY` in `.env.local`; the secret key stays on the
 server and the hosted checkout flow does not need the publishable key.
-`NEXT_PUBLIC_APP_URL` should be `http://localhost:3000` for local development.
+Set `NEXT_PUBLIC_APP_URL=http://localhost:3000` in `.env.local` for development.
+In Vercel, set `PRD_NEXT_PUBLIC_APP_URL` to the deployed HTTPS origin
+(`https://roya-events-adventures.vercel.app`). Checkout selects the local URL in
+development and the production URL in other environments.
 
 Apply the booking schema migration before testing checkout:
 
@@ -120,8 +123,7 @@ trueus/
 │   │   ├── layout.tsx                # Header and footer for customer pages
 │   │   ├── events/                   # Public events pages
 │   │   ├── adventures/               # Public adventures pages
-│   │   ├── custom-event/             # Custom event request page
-│   │   ├── private-adventure/        # Private adventure request page
+│   │   ├── private-event/            # private event request page
 │   │   └── contact/                  # General contact page
 │   │
 │   ├── admin/                        # Admin content management pages
@@ -180,8 +182,7 @@ Next.js uses the folders inside `app/` to create URLs.
 | `app/(customer)/adventures/page.tsx`             | `/adventures`                      | Browse adventures         |
 | `app/(customer)/adventures/[slug]/page.tsx`      | `/adventures/mountain-hike`        | Adventure details         |
 | `app/(customer)/adventures/[slug]/book/page.tsx` | `/adventures/mountain-hike/book`   | Booking request           |
-| `app/(customer)/custom-event/page.tsx`           | `/custom-event`                    | Custom event request      |
-| `app/(customer)/private-adventure/page.tsx`      | `/private-adventure`               | Private adventure request |
+| `app/(customer)/custom-event/page.tsx`           | `/custom-event`                    | Private event request      |
 | `app/(customer)/contact/page.tsx`                | `/contact`                         | General inquiry           |
 | `app/admin/page.tsx`                             | `/admin`                           | Admin dashboard           |
 | `app/api/inquiries/route.ts`                     | `/api/inquiries`                   | Inquiry API endpoint      |
@@ -318,7 +319,7 @@ Keep generic buttons, inputs, and layout components in `components/`. Keep busin
 - Event and adventure detail route placeholders
 - Stripe-hosted event ticket checkout with booking reservations
 - Adventure booking request pages
-- Custom event and private adventure inquiry pages
+- Private event inquiry page
 - Contact page
 - Admin dashboard and CMS navigation
 - Supabase browser/server client foundation
@@ -378,7 +379,7 @@ This keeps the database, backend logic, and user interface consistent.
 
 - Use **PascalCase** for React component files: `EventCard.tsx`.
 - Use **camelCase** for functions and variables: `getPublishedEvents`.
-- Use **kebab-case** for URL folders: `private-adventure`.
+- Use **kebab-case** for URL folders: `custom-event`.
 - Use **kebab-case** for utility files: `event-service.ts`.
 - Use **TypeScript types** for data contracts between backend and frontend.
 - Prefer descriptive names over abbreviations.

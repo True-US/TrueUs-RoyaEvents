@@ -1,7 +1,9 @@
-// All event dates are shown and grouped in Edmonton time. Use the IANA name,
-// never a fixed offset: Alberta stays on UTC-6 year-round from Nov 2026, and
-// the name picks that up once the runtime's tz data is updated.
-export const EVENT_TIME_ZONE: string = "America/Edmonton";
+// All event dates are shown and grouped in Alberta time. Alberta stays on UTC-6
+// all year from Nov 2026 (no more clock changes), so this is a fixed UTC-6 zone
+// ("Etc/GMT+6": the sign is inverted in the name). It does not depend on the
+// runtime's tz data, which still has the old winter time for America/Edmonton.
+// Change it only if Alberta's time rules change again.
+export const EVENT_TIME_ZONE: string = "Etc/GMT+6";
 
 // Values stored in event_adventure.status.
 // "Ended" is not a status: it is worked out from the dates (endDatetime < now).
@@ -20,6 +22,14 @@ export const EVENT_TYPE = {
   EVENT: "EVENT",
   ADVENTURE: "ADVENTURE",
   CUSTOM_EVENT: "CUSTOM_EVENT",
+} as const;
+
+// Review status of a customer request (event_adventure.request_status).
+export const REQUEST_STATUS = {
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  DECLINED: "DECLINED",
+  CANCELLED: "CANCELLED",
 } as const;
 
 // Union of the type values: "EVENT" | "ADVENTURE" | "CUSTOM_EVENT".
@@ -88,6 +98,6 @@ export const PRICE_MAX: number = 99999999.99;
 // Stripe can't charge less than this, so a paid ticket costs at least this much.
 export const MIN_PAID_PRICE: number = 0.5;
 
-// Custom event / contact / private adventure requests.
+// Private event / contact / private adventure requests.
 export const REQUEST_GUESTS_MAX: number = 100000;
 export const REQUEST_MESSAGE_MAX: number = 2000;

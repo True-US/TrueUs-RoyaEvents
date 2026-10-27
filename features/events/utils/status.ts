@@ -1,10 +1,11 @@
-import { EVENT_STATUS } from "@/features/events/constants";
+import { EVENT_STATUS, EVENT_TYPE, REQUEST_STATUS } from "@/features/events/constants";
 import { eventDetailsSchema, eventLocationSchema, getEventRuleErrors } from "@/features/events/schemas";
 import type { eventAdventureRecord } from "@/features/events/types";
 
 // What the admin list shows next to a record. A live record has no tag: its
 // Unpublish button says it is live.
-export type EventTag = "DRAFT" | "READY" | "EXPIRED" | "CANCELLED";
+// Requests (customer private events) show their review status instead of DRAFT/READY.
+export type EventTag = "DRAFT" | "READY" | "EXPIRED" | "CANCELLED" | "PENDING" | "APPROVED" | "DECLINED";
 
 /**
  * Whether an event is over. Derived from the dates, never stored, so the
@@ -21,12 +22,12 @@ export function isEventExpired(event: eventAdventureRecord, now: Date = new Date
 
 /**
  * Whether a saved event passes every rule needed to publish it: the same
- * schemas the form and server use, plus a cover image.
+ * schemas the form and server use. The cover image is optional.
  * @param event The admin event.
  * @returns True when nothing blocks publishing.
  */
 export function isEventReady(event: eventAdventureRecord): boolean {
-  if (!event.location || !event.coverUrl) {
+  if (!event.location) {
     return false;
   }
 
@@ -66,12 +67,19 @@ export function isEventReady(event: eventAdventureRecord): boolean {
  * The tags to show for an event.
  * @param event The admin event.
  * @returns EXPIRED when over, then DRAFT or READY while it is not live; CANCELLED as stored. [] for a live event.
+ *   A request gets its review status (PENDING when none is stored yet) instead.
  */
 export function getEventTags(event: eventAdventureRecord): EventTag[] {
   const tags: EventTag[] = [];
 
   if (isEventExpired(event)) {
     tags.push("EXPIRED");
+  }
+
+  if (event.eventType === EVENT_TYPE.CUSTOM_EVENT) {
+    tags.push((event.requestStatus ?? REQUEST_STATUS.PENDING) as EventTag);
+
+    return tags;
   }
 
   if (event.status === EVENT_STATUS.CANCELLED) {

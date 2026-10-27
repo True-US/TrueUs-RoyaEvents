@@ -80,10 +80,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const appUrlEnvironmentVariable =
+      process.env.NODE_ENV === "development"
+        ? "NEXT_PUBLIC_APP_URL"
+        : "PRD_NEXT_PUBLIC_APP_URL";
+    const configuredAppUrl = process.env[appUrlEnvironmentVariable];
     if (!configuredAppUrl) {
       await releasePendingReservation(reservation.booking.id, "PAYMENT_FAILED");
-      throw new Error("NEXT_PUBLIC_APP_URL is not configured.");
+      throw new Error(`${appUrlEnvironmentVariable} is not configured.`);
     }
     let appUrl: URL;
     try {
@@ -94,7 +98,7 @@ export async function POST(request: Request) {
         appUrl.hostname !== "127.0.0.1"
       ) {
         throw new Error(
-          "NEXT_PUBLIC_APP_URL must use HTTPS outside local development.",
+          `${appUrlEnvironmentVariable} must use HTTPS outside local development.`,
         );
       }
     } catch (error) {
