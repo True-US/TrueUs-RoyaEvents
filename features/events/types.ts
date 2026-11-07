@@ -67,6 +67,9 @@ export type eventAdventureRecord = {
   contact: { name: string; email: string; phone: string } | null;
   requestStatus: string | null;
   coverUrl: string | null; // Shown in the edit popup; null when there is no cover.
+  // When and by whom the record was last changed.
+  updatedAt: string;
+  updatedBy: string | null;
   location: {
     id: number;
     name: string;

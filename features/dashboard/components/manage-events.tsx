@@ -286,6 +286,8 @@ export function ManageEvents() {
   // The request popup. A new key on each open gives it an empty form.
   const [isRequestFormOpen, setIsRequestFormOpen] = useState<boolean>(false);
   const [requestFormKey, setRequestFormKey] = useState<number>(0);
+  // The request being edited in that popup; null when creating a new one.
+  const [editingRequest, setEditingRequest] = useState<eventAdventureRecord | null>(null);
   // List settings (the Settings dropdown above the list).
   const [hideExpired, setHideExpired] = useState<boolean>(true);
   const [sortBy, setSortBy] = useState<SortBy>("date");
@@ -348,6 +350,7 @@ export function ManageEvents() {
     // The Request tab has its own form (contact details, no price or cover).
     if (activeType === EVENT_TYPE.CUSTOM_EVENT) {
       setMessage("");
+      setEditingRequest(null);
       setRequestFormKey((key: number) => key + 1);
       setIsRequestFormOpen(true);
       return;
@@ -802,13 +805,27 @@ export function ManageEvents() {
   }
 
   /**
-   * Approves or declines a customer request, then reloads the list.
+   * Opens the request popup filled with a saved request.
+   * @param event The request to edit.
+   */
+  function openEditRequest(event: eventAdventureRecord): void {
+    setMessage("");
+    setEditingRequest(event);
+    setRequestFormKey((key: number) => key + 1);
+    setIsRequestFormOpen(true);
+  }
+
+  /**
+   * Approves, declines or reopens a customer request, then reloads the list.
    * @param eventId The id of the request's event record.
-   * @param status APPROVED or DECLINED.
+   * @param status APPROVED, DECLINED or PENDING (reopen).
    */
   async function handleSetRequestStatus(eventId: number, status: string): Promise<void> {
-    // Declining can't be undone, so ask first.
-    if (status === REQUEST_STATUS.DECLINED && !window.confirm("Decline this request? This can't be undone.")) {
+    // A declined request can be reopened, but ask first.
+    if (status === REQUEST_STATUS.DECLINED && !window.confirm("Decline this request? You can reopen it later.")) {
+      return;
+    }
+    if (status === REQUEST_STATUS.PENDING && !window.confirm("Reopen this request? It goes back to pending.")) {
       return;
     }
 
@@ -820,7 +837,12 @@ export function ManageEvents() {
         throw new Error(result.message);
       }
 
-      showSuccess(status === REQUEST_STATUS.APPROVED ? "Request approved." : "Request declined.");
+      const done: Record<string, string> = {
+        [REQUEST_STATUS.APPROVED]: "Request approved.",
+        [REQUEST_STATUS.DECLINED]: "Request declined.",
+        [REQUEST_STATUS.PENDING]: "Request reopened.",
+      };
+      showSuccess(done[status] ?? "Request updated.");
 
       await loadAllRecords();
     } catch (error) {
@@ -1139,6 +1161,11 @@ export function ManageEvents() {
                                   </h4>
                                   <p className="mt-1 whitespace-pre-wrap">{event.description || "No description."}</p>
                                 </section>
+
+                                <p className="text-xs md:col-span-2">
+                                  Last updated {new Date(event.updatedAt).toLocaleString()}
+                                  {event.updatedBy ? ` by ${event.updatedBy}` : ""}
+                                </p>
                               </div>
                             )}
 
@@ -1206,11 +1233,13 @@ export function ManageEvents() {
                               </button>
                             )}
 
-                            {/* A request can't use the event form; it is reviewed, not edited. */}
-                            {event.eventType !== EVENT_TYPE.CUSTOM_EVENT && (
+                            {/* A request has its own form (contact details, no price or cover). */}
+                            {(event.requestStatus ?? REQUEST_STATUS.PENDING) !== REQUEST_STATUS.CANCELLED && (
                               <button
                                 type="button"
-                                onClick={() => editEvent(event)}
+                                onClick={() =>
+                                  event.eventType === EVENT_TYPE.CUSTOM_EVENT ? openEditRequest(event) : editEvent(event)
+                                }
                                 aria-label="Edit"
                                 title="Edit"
                                 className="rounded-md border border-roya-slate/30 p-2 text-roya-ink hover:bg-roya-slate/5"
@@ -1254,6 +1283,19 @@ export function ManageEvents() {
                                     Decline
                                   </button>
                                 </>
+                              )}
+
+                            {/* An approved or declined request can go back to pending for another review. */}
+                            {event.eventType === EVENT_TYPE.CUSTOM_EVENT &&
+                              (event.requestStatus === REQUEST_STATUS.APPROVED ||
+                                event.requestStatus === REQUEST_STATUS.DECLINED) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetRequestStatus(Number(event.id), REQUEST_STATUS.PENDING)}
+                                  className="rounded-md border border-amber-400 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50"
+                                >
+                                  Reopen
+                                </button>
                               )}
 
                             {event.isActive ? (
@@ -1319,6 +1361,7 @@ export function ManageEvents() {
       <RequestFormDialog
         key={requestFormKey}
         open={isRequestFormOpen}
+        event={editingRequest}
         onClose={() => setIsRequestFormOpen(false)}
         onCreated={(text: string) => {
           setIsRequestFormOpen(false);

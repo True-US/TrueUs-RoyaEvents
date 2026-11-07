@@ -193,12 +193,21 @@ export async function updateEventWithLocation(
 
         eventType: resolveEventType(payload.event.eventType),
 
-        // Contact details are never edited here. A record switched to Request starts
-        // as PENDING; one switched away from Request has no request status.
+        // A request keeps its status when edited, and its contact details are saved when sent.
+        // A record switched to Request starts as PENDING; one switched away has no request status.
         requestStatus:
           resolveEventType(payload.event.eventType) === EVENT_TYPE.CUSTOM_EVENT
             ? (current?.requestStatus ?? REQUEST_STATUS.PENDING)
             : null,
+        ...(resolveEventType(payload.event.eventType) === EVENT_TYPE.CUSTOM_EVENT &&
+        payload.event.contactName !== undefined
+          ? {
+              contactName: payload.event.contactName,
+              contactEmail: payload.event.contactEmail ?? null,
+              contactPhone: payload.event.contactPhone ?? null,
+            }
+          : {}),
+        ...(payload.event.updatedBy ? { updatedBy: payload.event.updatedBy } : {}),
 
         status: payload.event.status ?? "DRAFT",
 
