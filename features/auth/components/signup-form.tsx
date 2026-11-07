@@ -5,7 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { FieldError, FormError } from "@/components/ui/form-feedback";
-import { EMAIL_MAX, PASSWORD_MAX, PERSON_NAME_MAX, PHONE_MAX } from "@/features/auth/constants";
+import {
+  EMAIL_MAX,
+  PASSWORD_MAX,
+  PERSON_NAME_MAX,
+  PHONE_MAX,
+} from "@/features/auth/constants";
 import { signupSchema, type SignupInput } from "@/features/auth/schemas";
 import { getFieldErrors } from "@/lib/validation/errors";
 import { msg } from "@/lib/validation/messages";
@@ -22,7 +27,8 @@ const initialValues: SignupInput = {
 };
 
 const inputClass: string = "w-full rounded-md border px-3 py-2";
-const invalidClass: string = "w-full rounded-md border border-red-500 px-3 py-2";
+const invalidClass: string =
+  "w-full rounded-md border border-red-500 px-3 py-2";
 
 export function SignupForm() {
   const router = useRouter();
@@ -68,7 +74,8 @@ export function SignupForm() {
 
     setError("");
 
-    const parsed: ReturnType<typeof signupSchema.safeParse> = signupSchema.safeParse(values);
+    const parsed: ReturnType<typeof signupSchema.safeParse> =
+      signupSchema.safeParse(values);
     if (!parsed.success) {
       setFieldErrors(getFieldErrors(parsed.error));
       setError(msg.fixFields);
@@ -88,7 +95,9 @@ export function SignupForm() {
       router.replace("/login");
     } catch (error) {
       setError(
-        error instanceof Error ? error.message : msg.unableTo("create the account"),
+        error instanceof Error
+          ? error.message
+          : msg.unableTo("create the account"),
       );
     } finally {
       setLoading(false);
@@ -110,7 +119,10 @@ export function SignupForm() {
               htmlFor="firstName"
               className="mb-1 block text-sm font-medium"
             >
-              First name
+              First name{" "}
+              <span aria-hidden="true" className="text-red-600">
+                *
+              </span>
             </label>
 
             <input
@@ -131,7 +143,10 @@ export function SignupForm() {
               htmlFor="lastName"
               className="mb-1 block text-sm font-medium"
             >
-              Last name
+              Last name{" "}
+              <span aria-hidden="true" className="text-red-600">
+                *
+              </span>
             </label>
 
             <input
@@ -150,7 +165,10 @@ export function SignupForm() {
 
         <div>
           <label htmlFor="email" className="mb-1 block text-sm font-medium">
-            Email
+            Email{" "}
+            <span aria-hidden="true" className="text-red-600">
+              *
+            </span>
           </label>
 
           <input
@@ -186,7 +204,10 @@ export function SignupForm() {
 
         <div>
           <label htmlFor="password" className="mb-1 block text-sm font-medium">
-            Password
+            Password{" "}
+            <span aria-hidden="true" className="text-red-600">
+              *
+            </span>
           </label>
 
           <input
@@ -207,7 +228,10 @@ export function SignupForm() {
             htmlFor="confirmPassword"
             className="mb-1 block text-sm font-medium"
           >
-            Confirm password
+            Confirm password{" "}
+            <span aria-hidden="true" className="text-red-600">
+              *
+            </span>
           </label>
 
           <input
@@ -220,7 +244,10 @@ export function SignupForm() {
             required
             {...fieldProps("confirmPassword")}
           />
-          <FieldError id="confirmPassword-error" message={fieldErrors.confirmPassword} />
+          <FieldError
+            id="confirmPassword-error"
+            message={fieldErrors.confirmPassword}
+          />
         </div>
 
         <FormError message={error} />

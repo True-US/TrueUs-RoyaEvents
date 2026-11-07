@@ -32,6 +32,12 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* Never show a sideways scrollbar. clip (not hidden) keeps the sticky header working. */
+html,
+body {
+  overflow-x: clip;
+}
+
 /* While a modal <dialog> is open, stop the page behind it from scrolling. */
 body:has(dialog[open]) {
   overflow: hidden;
@@ -88,5 +94,199 @@ body:has(dialog[open]) {
   .roya-dialog,
   .roya-dialog::backdrop {
     transition: none;
+  }
+}
+
+/* ---------- Homepage hero: crossfading scenes ----------
+   Three slides share one 18s loop, offset by 6s. Captions and progress bars
+   use the same loop and delays so they stay in sync. Pure CSS, no timers. */
+.hero {
+  position: relative;
+  overflow: hidden;
+  min-height: 520px;
+  background: var(--color-roya-ink);
+}
+
+@media (min-width: 768px) {
+  .hero {
+    height: 600px;
+    min-height: 0;
+  }
+}
+
+.hero-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  /* Shown whenever a photo is missing. */
+  background: linear-gradient(135deg, #161b20 0%, var(--color-roya-slate) 100%);
+  animation: hero-slide 18s linear infinite;
+}
+
+.hero-slide[data-scene="1"],
+.hero-caption[data-scene="1"],
+.hero-bar[data-scene="1"] {
+  animation-delay: 6s;
+}
+
+.hero-slide[data-scene="2"],
+.hero-caption[data-scene="2"],
+.hero-bar[data-scene="2"] {
+  animation-delay: 12s;
+}
+
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgb(22 27 32 / 0.92) 0%,
+    rgb(22 27 32 / 0.75) 50%,
+    rgb(22 27 32 / 0.5) 100%
+  );
+}
+
+@media (min-width: 768px) {
+  .hero-overlay {
+    background: linear-gradient(
+      90deg,
+      rgb(22 27 32 / 0.92) 0%,
+      rgb(22 27 32 / 0.75) 38%,
+      rgb(22 27 32 / 0.15) 70%,
+      rgb(22 27 32 / 0.05) 100%
+    );
+  }
+}
+
+.hero-edge {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 60px;
+  fill: var(--background);
+}
+
+.hero-scene-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+@media (min-width: 768px) {
+  .hero-scene-box {
+    align-items: flex-end;
+    text-align: right;
+  }
+}
+
+.hero-captions {
+  position: relative;
+  height: 48px;
+  width: 260px;
+}
+
+.hero-caption {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: hero-caption 18s linear infinite;
+}
+
+.hero-bars {
+  display: flex;
+  gap: 6px;
+  height: 4px;
+}
+
+.hero-bar {
+  height: 4px;
+  width: 8px;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.45);
+  animation: hero-bar 18s linear infinite;
+}
+
+@keyframes hero-slide {
+  0% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  6% {
+    opacity: 1;
+  }
+  33% {
+    opacity: 1;
+  }
+  39% {
+    opacity: 0;
+    transform: scale(1.07);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes hero-caption {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  6% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  33% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  39% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes hero-bar {
+  0% {
+    width: 8px;
+    background: rgb(255 255 255 / 0.45);
+  }
+  6% {
+    width: 28px;
+    background: var(--color-roya-sun);
+  }
+  33% {
+    width: 28px;
+    background: var(--color-roya-sun);
+  }
+  39% {
+    width: 8px;
+    background: rgb(255 255 255 / 0.45);
+  }
+  100% {
+    width: 8px;
+    background: rgb(255 255 255 / 0.45);
+  }
+}
+
+/* Reduced motion: no animation; show slide 1, caption 1 and bar 1 only. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-slide,
+  .hero-caption,
+  .hero-bar {
+    animation: none;
+  }
+
+  .hero-slide[data-scene="0"],
+  .hero-caption[data-scene="0"] {
+    opacity: 1;
+  }
+
+  .hero-bar[data-scene="0"] {
+    width: 28px;
+    background: var(--color-roya-sun);
   }
 }

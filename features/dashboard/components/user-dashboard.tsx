@@ -169,7 +169,7 @@ export function UserDashboard({
                     </p>
                   </div>
                   <p className="font-semibold text-roya-ink">
-                    Total: {booking.totalAmount}
+                    Total Price: ${booking.totalAmount}
                   </p>
                 </article>
               ))}
