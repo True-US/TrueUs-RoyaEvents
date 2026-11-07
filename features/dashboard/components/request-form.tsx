@@ -5,7 +5,7 @@ import type { ChangeEvent, FormEvent, ReactNode } from "react";
 
 import { FieldError, FormError, invalidInputClass } from "@/components/ui/form-feedback";
 import { EMAIL_MAX, PHONE_MAX } from "@/features/auth/constants";
-import { createEventRequest } from "@/features/events/api";
+import { createEventRequest, updateEventRequest } from "@/features/events/api";
 import {
   EVENT_TITLE_MAX,
   LOCATION_ADDRESS_MAX,
@@ -17,7 +17,7 @@ import {
   REQUEST_MESSAGE_MAX,
 } from "@/features/events/constants";
 import { customEventStep2Schema, customEventStep3Schema, requestContactSchema } from "@/features/events/schemas";
-import type { CreateEventWithLocationInput } from "@/features/events/types";
+import type { CreateEventWithLocationInput, eventAdventureRecord } from "@/features/events/types";
 import { dateToZonedInput, zonedInputToDate } from "@/features/events/utils/dates";
 import { makeSlug } from "@/features/events/utils/slug";
 import { getFieldErrors } from "@/lib/validation/errors";
@@ -67,18 +67,45 @@ type RequestFormDialogProps = {
   onClose: () => void;
   // Called after the request is saved, with the message to show on the page.
   onCreated: (message: string) => void;
+  // The request to edit. Leave it out (or null) to create a new one.
+  event?: eventAdventureRecord | null;
 };
 
 /**
- * Popup for an admin to enter a customer's request (for example one taken by phone).
+ * Fills the form from a saved request.
+ * @param event The request record from the admin list.
+ * @returns The form values, with dates in Edmonton time for the date inputs.
+ */
+function toFormData(event: eventAdventureRecord): RequestFormData {
+  return {
+    contactName: event.contact?.name ?? "",
+    contactEmail: event.contact?.email ?? "",
+    contactPhone: event.contact?.phone ?? "",
+    title: event.title,
+    startDate: dateToZonedInput(event.startsAt),
+    endDate: event.endsAt ? dateToZonedInput(event.endsAt) : "",
+    numberOfGuests: event.capacity === null ? "" : String(event.capacity),
+    location: event.location?.name ?? "",
+    address: event.location?.address ?? "",
+    city: event.location?.city ?? "",
+    province: event.location?.province ?? "",
+    postalCode: event.location?.postalCode ?? "",
+    country: event.location?.country ?? "Canada",
+    message: event.description,
+  };
+}
+
+/**
+ * Popup for an admin to enter a customer's request (for example one taken by phone),
+ * or to edit a saved one when `event` is given.
  * It is separate from the event form: a request has contact details and no price,
- * status or cover. Give it a new `key` each time it opens to start with an empty form.
+ * status or cover. Give it a new `key` each time it opens to start from fresh values.
  * @param props See RequestFormDialogProps.
  * @returns The dialog.
  */
-export function RequestFormDialog({ open, onClose, onCreated }: RequestFormDialogProps) {
+export function RequestFormDialog({ open, onClose, onCreated, event = null }: RequestFormDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [form, setForm] = useState<RequestFormData>(emptyRequest);
+  const [form, setForm] = useState<RequestFormData>(event ? toFormData(event) : emptyRequest);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<boolean>(false);
   const [submitError, setSubmitError] = useState<string>("");
@@ -189,6 +216,24 @@ export function RequestFormDialog({ open, onClose, onCreated }: RequestFormDialo
       setSaving(true);
       setSubmitError("");
 
+      // Editing keeps the request's status and slug; the server saves the admin as the editor.
+      if (event) {
+        await updateEventRequest({
+          id: Number(event.id),
+          location: { ...payload.location, id: event.location?.id ?? 0 },
+          event: {
+            ...payload.event,
+            slug: event.slug,
+            // Left out so the server keeps the spots already booked.
+            availableSpots: undefined,
+            status: event.status,
+            isActive: event.isActive,
+          },
+        });
+        onCreated("Request updated.");
+        return;
+      }
+
       const result: Awaited<ReturnType<typeof createEventRequest>> = await createEventRequest(payload);
       if (!result.success) {
         setSubmitError(result.message ?? msg.unableTo("save the request"));
@@ -197,7 +242,8 @@ export function RequestFormDialog({ open, onClose, onCreated }: RequestFormDialo
 
       onCreated("Request created. It is pending your review.");
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : msg.unableTo("save the request"));
+      // updateEventRequest throws the server's message; a create only throws on a network failure.
+      setSubmitError(event && error instanceof Error ? error.message : msg.unableTo("save the request"));
     } finally {
       setSaving(false);
     }
@@ -253,7 +299,7 @@ export function RequestFormDialog({ open, onClose, onCreated }: RequestFormDialo
     >
       <div className="flex shrink-0 items-center justify-between gap-4 border-b border-roya-slate/20 bg-white px-6 py-4">
         <h2 id="request-form-title" className="font-display text-3xl font-bold text-roya-ink">
-          New Private
+          {event ? "Edit Private" : "New Private"}
         </h2>
 
         <button
@@ -283,8 +329,8 @@ export function RequestFormDialog({ open, onClose, onCreated }: RequestFormDialo
 
             <h3 className="mt-2 font-display text-xl font-bold text-roya-ink md:col-span-2">Event info</h3>
             {textInput("title", "Event name", { maxLength: EVENT_TITLE_MAX, wide: true })}
-            {textInput("startDate", "Start (Edmonton time)", { type: "datetime-local", min: minDateTime })}
-            {textInput("endDate", "End (Edmonton time)", { type: "datetime-local", min: minDateTime })}
+            {textInput("startDate", "Start (Edmonton time)", { type: "datetime-local", min: event ? undefined : minDateTime })}
+            {textInput("endDate", "End (Edmonton time)", { type: "datetime-local", min: event ? undefined : minDateTime })}
             {textInput("numberOfGuests", "Number of guests", { type: "number", min: "1" })}
             {textInput("location", "Location name", { maxLength: LOCATION_NAME_MAX, wide: true })}
             {textInput("address", "Address", { maxLength: LOCATION_ADDRESS_MAX, wide: true })}
@@ -319,7 +365,7 @@ export function RequestFormDialog({ open, onClose, onCreated }: RequestFormDialo
               disabled={saving}
               className="rounded-md bg-roya-sun px-5 py-2.5 text-sm font-bold text-roya-ink hover:opacity-90 disabled:opacity-50"
             >
-              {saving ? "Saving..." : "Create Request"}
+              {saving ? "Saving..." : event ? "Save Changes" : "Create Request"}
             </button>
 
             <button

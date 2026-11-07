@@ -56,6 +56,51 @@ export async function getPublicEventList(params: EventListParams): Promise<Event
   return rows.map(toEventListItem);
 }
 
+
+/**
+ * Returns upcoming published events for the homepage.
+ */
+export async function getHomepageEvents(): Promise<EventListItem[]> {
+  const now = new Date();
+
+  const rows = await prisma.eventAdventure.findMany({
+    where: {
+      ...visibleEventsWhere(now),
+      eventType: "EVENT",
+    },
+    select: eventCardSelect,
+    orderBy: {
+      startDatetime: "asc",
+    },
+    take: 8,
+  });
+
+  return rows.map(toEventListItem);
+}
+
+/**
+ * Returns upcoming published adventures for the homepage.
+ */
+export async function getHomepageAdventures(): Promise<EventListItem[]> {
+  const now = new Date();
+
+  const rows = await prisma.eventAdventure.findMany({
+    where: {
+      ...visibleEventsWhere(now),
+      eventType: "ADVENTURE",
+    },
+    select: eventCardSelect,
+    orderBy: {
+      startDatetime: "asc",
+    },
+    take: 8,
+  });
+
+  return rows.map(toEventListItem);
+}
+
+
+
 /**
  * Searches the events the public may see by keyword. Matches the title only, ignoring case.
  * @param term The trimmed search text.
@@ -254,6 +299,8 @@ export async function getAdminEvents(): Promise<eventAdventureRecord[]> {
         : null,
     requestStatus: event.requestStatus,
     coverUrl: getCoverUrl(event.coverImagePath),
+    updatedAt: event.updatedAt.toISOString(),
+    updatedBy: event.updatedBy,
 
     location: event.location
       ? {

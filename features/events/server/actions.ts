@@ -209,22 +209,24 @@ export async function setEventPublishedAction(eventId: number, publish: boolean)
 }
 
 // Which review statuses a request may move to, from each current status.
-// DECLINED and CANCELLED are final. The values are checked here, not by the database.
+// APPROVED and DECLINED can be reopened (back to PENDING); CANCELLED is final.
+// The values are checked here, not by the database.
 const REQUEST_TRANSITIONS: Record<string, string[]> = {
   [REQUEST_STATUS.PENDING]: [REQUEST_STATUS.APPROVED, REQUEST_STATUS.DECLINED, REQUEST_STATUS.CANCELLED],
-  [REQUEST_STATUS.APPROVED]: [REQUEST_STATUS.CANCELLED],
-  [REQUEST_STATUS.DECLINED]: [],
+  [REQUEST_STATUS.APPROVED]: [REQUEST_STATUS.PENDING, REQUEST_STATUS.CANCELLED],
+  [REQUEST_STATUS.DECLINED]: [REQUEST_STATUS.PENDING],
   [REQUEST_STATUS.CANCELLED]: [],
 };
 
 /**
- * Moves a customer request to a new review status (approve, decline, cancel).
+ * Moves a customer request to a new review status (approve, decline, reopen, cancel).
  * @param eventId The id of the request's event record.
- * @param status The new status: APPROVED, DECLINED or CANCELLED.
+ * @param status The new status: PENDING (reopen), APPROVED, DECLINED or CANCELLED.
  * @returns The event id, or an error message.
  */
 export async function setRequestStatusAction(eventId: number, status: string): Promise<EventActionResult> {
-  if (!(await isCurrentUserAdmin())) {
+  const profile: Awaited<ReturnType<typeof getCurrentProfile>> = await getCurrentProfile();
+  if (!profile || !profile.role || !isAdminRole(profile.role.name)) {
     return failure("Unauthorized.");
   }
 
@@ -256,7 +258,7 @@ export async function setRequestStatusAction(eventId: number, status: string): P
   try {
     await prisma.eventAdventure.update({
       where: { id: eventId },
-      data: { requestStatus: status },
+      data: { requestStatus: status, updatedBy: `${profile.firstName} ${profile.lastName}` },
     });
   } catch (error) {
     console.error("Request status error:", error);

@@ -1,33 +1,28 @@
-## Prerequisites
-
-Before running the project locally, make sure the following software is installed:
-
-- **Node.js** - v24.21.0
-  - https://nodejs.org/en/download
-  - Includes npm
-
-- **Visual Studio Code**
-  - https://code.visualstudio.com/
-
-- **Git**
-  - https://git-scm.com/downloads
-
 # Roya Events & Adventures
 
-Roya Events & Adventures is a full-stack web application for discovering events, booking adventures, requesting custom experiences, and managing website content.
+Roya Events & Adventures is a full-stack web application for discovering events, buying event tickets, requesting adventure bookings and custom events, and managing website content.
 
-This project uses:
+Tech stack:
 
-- **Next.js** for the application framework and backend features
-- **React** for the user interface
-- **TypeScript** for safer code
-- **Tailwind CSS** for styling
-- **Supabase** for the database, authentication, and file storage
+- **Next.js 16** (App Router) and **React 19** for the application and backend features
+- **TypeScript** and **Tailwind CSS 4**
+- **Prisma 7** with PostgreSQL (via `@prisma/adapter-pg`) for data access
+- **Supabase** for authentication (email/password and password reset) and file storage (event cover images)
+- **Stripe** hosted Checkout (CAD) for event tickets
+- **Zod** for server-side validation
 
-The application includes public event and adventure browsing, admin management,
-Prisma/PostgreSQL data access, Supabase authentication, and a Stripe-hosted event
-ticket checkout flow. Connecting provider credentials, applying database
-migrations, and configuring production webhooks are deployment steps.
+> This version of Next.js has breaking changes from older releases. Before changing framework-level code, read the relevant guide in `node_modules/next/dist/docs/` (see `AGENTS.md`).
+
+---
+
+## Prerequisites
+
+- **Node.js** v24 (includes npm) - https://nodejs.org/en/download
+- **Git** - https://git-scm.com/downloads
+- **Visual Studio Code** (recommended) - https://code.visualstudio.com/
+- A **Supabase** project and a **Stripe** account (test mode is fine)
+- **Stripe CLI** (optional, for testing webhooks locally)
+- **Supabase CLI** (optional, for local Supabase; `supabase/config.toml` is included)
 
 ---
 
@@ -35,73 +30,73 @@ migrations, and configuring production webhooks are deployment steps.
 
 ### 1. Install dependencies
 
-From the project folder, run:
-
 ```bash
 npm install
 ```
 
+`postinstall` runs `prisma generate`, which creates the Prisma client in `generated/prisma`.
+
 ### 2. Create the local environment file
 
-Copy `.env.example` to `.env.local`:
-
-```powershell
-Copy-Item .env.example .env.local
-```
-
-Add the Supabase and database values to `.env.local`:
+Create `.env.local` in the project root (environment files are ignored by Git):
 
 ```env
-DIRECT_URL=your-postgresql-connection-string
+# Database (Prisma)
+DATABASE_URL=your-pooled-postgresql-connection-string
+DIRECT_URL=your-direct-postgresql-connection-string
+
+# Supabase
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Stripe
+STRIPE_SECRET_KEY=your-stripe-test-secret-key
+STRIPE_WEBHOOK_SECRET=your-stripe-webhook-signing-secret
+
+# App URL (used for Stripe redirect URLs)
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-Never commit `.env.local` or expose the service-role key in browser code. Environment files are ignored by Git.
+- `DIRECT_URL` is used by the Prisma CLI for migrations (`prisma.config.ts`); `DATABASE_URL` is used by the running app.
+- In Vercel, set `PRD_NEXT_PUBLIC_APP_URL` to the deployed HTTPS origin. Checkout uses `NEXT_PUBLIC_APP_URL` in development and `PRD_NEXT_PUBLIC_APP_URL` otherwise.
+- Never commit `.env.local` or expose `SUPABASE_SERVICE_ROLE_KEY` / `STRIPE_SECRET_KEY` in browser code.
 
-### Stripe ticket checkout
-
-Ticket payments use Stripe-hosted Checkout in CAD. Put the Stripe **test-mode**
-secret key in `STRIPE_SECRET_KEY` in `.env.local`; the secret key stays on the
-server and the hosted checkout flow does not need the publishable key.
-Set `NEXT_PUBLIC_APP_URL=http://localhost:3000` in `.env.local` for development.
-In Vercel, set `PRD_NEXT_PUBLIC_APP_URL` to the deployed HTTPS origin
-(`https://roya-events-adventures.vercel.app`). Checkout selects the local URL in
-development and the production URL in other environments.
-
-Apply the booking schema migration before testing checkout:
+### 3. Apply database migrations
 
 ```bash
-npx prisma migrate dev
+npx prisma migrate dev     # local development
+npx prisma migrate deploy  # cloud / production (not run automatically on Vercel)
 ```
 
-To receive local payment confirmations and release expired ticket reservations,
-install the Stripe CLI and run:
+Optional seed data is in `supabase/seed-events.sql` and `supabase/seed-adventures.sql`; run them in the Supabase SQL editor.
+
+### 4. Supabase setup
+
+- **Storage:** create the event cover bucket (name is defined as `EVENT_COVER_BUCKET` in `features/events/constants.ts`). It is public for reads; uploads happen server-side with the service-role key.
+- **Auth redirect URLs:** add `<app url>/auth/callback` to the allowed redirect URLs so password-reset emails work.
+
+### 5. Stripe ticket checkout
+
+Ticket payments use Stripe-hosted Checkout in CAD. Ticket inventory is reserved when checkout begins; the webhook confirms paid bookings and releases inventory when a Checkout session expires or its asynchronous payment fails. Checkout works for signed-in customers and guests.
+
+To receive payment confirmations locally:
 
 ```bash
 stripe listen --forward-to localhost:3000/api/webhooks/stripe
 ```
 
-Copy the signing secret printed by the CLI into `STRIPE_WEBHOOK_SECRET` in
-`.env.local`, then restart the Next.js development server. In production,
-configure a Stripe webhook endpoint at `/api/webhooks/stripe` for
-`checkout.session.completed`, `checkout.session.async_payment_succeeded`,
-`checkout.session.async_payment_failed`, and `checkout.session.expired`.
+Copy the printed signing secret into `STRIPE_WEBHOOK_SECRET` and restart the dev server. In production, configure a webhook endpoint at `/api/webhooks/stripe` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, and `checkout.session.expired`.
 
-Checkout works for signed-in customers and guests. Ticket inventory is reserved
-when checkout begins; the webhook confirms paid bookings and restores inventory
-when a Checkout session expires or its asynchronous payment fails.
-
-### 3. Start the development server
+### 6. Start the development server
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in a browser.
+Open [http://localhost:3000](http://localhost:3000).
 
-### 4. Check the project before committing
+### 7. Check the project before committing
 
 ```bash
 npm run lint
@@ -109,313 +104,165 @@ npx tsc --noEmit
 npm run build
 ```
 
-`lint` checks code style and common mistakes. `tsc` checks TypeScript types. `build` confirms that Next.js can create a production build.
-
 ---
 
 ## Project Structure
 
 ```text
-trueus/
 ├── app/                              # Next.js routes and layouts
-│   ├── (customer)/                   # Public customer-facing website
-│   │   ├── page.tsx                  # Home page: /
-│   │   ├── layout.tsx                # Header and footer for customer pages
-│   │   ├── events/                   # Public events pages
-│   │   ├── adventures/               # Public adventures pages
-│   │   ├── private-event/            # private event request page
-│   │   └── contact/                  # General contact page
-│   │
-│   ├── admin/                        # Admin content management pages
-│   │   ├── layout.tsx                # Admin navigation and admin shell
-│   │   ├── page.tsx                  # Admin dashboard
-│   │   ├── events/                   # Manage events
-│   │   ├── adventures/               # Manage adventures
-│   │   ├── bookings/                 # Review bookings
-│   │   ├── inquiries/                # Review customer inquiries
-│   │   └── gallery/                  # Manage gallery media
-│   │
-│   ├── api/                          # Server HTTP endpoints
-│   │   ├── inquiries/route.ts        # Inquiry endpoint
-│   │   └── webhooks/route.ts         # Future payment/provider webhooks
-│   │
-│   ├── layout.tsx                    # Root layout for the entire application
-│   └── globals.css                   # Global Tailwind styles and CSS variables
+│   ├── (customer)/                   # Public and customer-facing pages
+│   │   ├── page.tsx                  # Home: /
+│   │   ├── events/                   # Event list, detail, checkout, checkout success
+│   │   ├── adventures/               # Adventure list, detail, booking request
+│   │   ├── custom-event/             # Custom/private event request
+│   │   ├── contact/                  # General inquiry
+│   │   ├── search/                   # Search
+│   │   ├── tickets/                  # Customer tickets
+│   │   ├── dashboard/                # Customer / admin dashboard (by role)
+│   │   ├── login/  signup/           # Authentication pages
+│   │   └── forgot-password/  reset-password/   # Password reset flow
+│   ├── admin/                        # Admin pages (events, adventures, bookings, inquiries, gallery)
+│   ├── auth/callback/route.ts        # Exchanges emailed Supabase code for a session
+│   ├── api/                          # HTTP endpoints
+│   │   ├── auth/signup/              # Sign-up
+│   │   ├── bookings/  checkout/      # Booking and Stripe Checkout creation
+│   │   ├── events/  schedule/        # Event and schedule endpoints
+│   │   ├── inquiries/                # Inquiry endpoint
+│   │   └── webhooks/stripe/          # Stripe webhook (signature verified)
+│   ├── layout.tsx  globals.css  manifest.ts
 │
-├── components/                       # Reusable visual React components
-│   ├── forms/                        # Forms used by customer workflows
-│   ├── site/                         # Header, footer, and public site shell
-│   └── ui/                           # Generic UI components
+├── components/                       # Shared visual components
+│   ├── site/                         # Header and footer
+│   └── ui/                           # Generic UI (PageIntro, form feedback)
 │
-├── features/                         # Business areas, also called domain modules
-│   ├── events/                       # Event types and event queries
-│   └── adventures/                   # Adventure types and adventure queries
+├── features/                         # Business modules (queries, actions, schemas, components)
+│   ├── auth/                         # Login, signup, password reset, current profile
+│   ├── events/                       # Event CRUD, filtering, cover images, slugs, dates
+│   ├── adventures/                   # Adventure queries and cards
+│   ├── bookings/                     # Ticket checkout, reservations, validation
+│   └── dashboard/                    # Admin/customer dashboards, schedule, users, permissions
 │
-├── lib/                              # Shared application and infrastructure code
-│   └── supabase/                     # Supabase client configuration
-│       ├── browser.ts                # Supabase client for browser components
-│       └── server.ts                 # Supabase client for server code
+├── lib/
+│   ├── stripe/server.ts              # Stripe server client
+│   ├── supabase/                     # browser, server, admin (service-role) and Prisma clients
+│   └── validation/                   # Shared Zod field helpers, messages, error formatting
 │
+├── server/                           # Shared server helpers (HTTP responses, locations)
+├── prisma/                           # schema.prisma and migrations
+├── generated/prisma/                 # Generated Prisma client (do not edit)
+├── supabase/                         # Supabase CLI config and SQL seed files
 ├── types/                            # Shared TypeScript types
-│   └── database.ts                   # Supabase database type definitions
-│
-├── public/                           # Static files served from the website root
-├── .env.example                      # Required environment variable template
-├── package.json                      # Dependencies and npm scripts
-├── tsconfig.json                     # TypeScript configuration
-├── next.config.ts                    # Next.js configuration
-└── eslint.config.mjs                 # ESLint configuration
+├── public/                           # Static assets
+├── .github/workflows/                # GitHub Actions (create merge PR)
+├── prisma.config.ts  next.config.ts  eslint.config.mjs  tsconfig.json
+└── AGENTS.md  CLAUDE.md              # Instructions for AI coding assistants
 ```
 
 ---
 
-## How Next.js Routes Work
+## Routes
 
-Next.js uses the folders inside `app/` to create URLs.
+| Route                              | Purpose                          |
+| ---------------------------------- | -------------------------------- |
+| `/`                                | Home page                        |
+| `/events`                          | Browse and filter events         |
+| `/events/[slug]`                   | Event details                    |
+| `/events/[slug]/checkout`          | Ticket checkout                  |
+| `/events/[slug]/checkout/success`  | Post-payment confirmation        |
+| `/adventures`, `/adventures/[slug]`| Browse adventures, details       |
+| `/adventures/[slug]/book`          | Adventure booking request        |
+| `/custom-event`                    | Custom event request             |
+| `/contact`                         | General inquiry                  |
+| `/search`                          | Search                           |
+| `/tickets`, `/dashboard`           | Signed-in customer pages         |
+| `/login`, `/signup`                | Authentication                   |
+| `/forgot-password`, `/reset-password` | Password reset                |
+| `/admin/*`                         | Admin management                 |
 
-| File                                             | URL                                | Purpose                   |
-| ------------------------------------------------ | ---------------------------------- | ------------------------- |
-| `app/(customer)/page.tsx`                        | `/`                                | Home page                 |
-| `app/(customer)/events/page.tsx`                 | `/events`                          | Browse events             |
-| `app/(customer)/events/[slug]/page.tsx`          | `/events/summer-festival`          | Event details             |
-| `app/(customer)/events/[slug]/checkout/page.tsx` | `/events/summer-festival/checkout` | Ticket checkout           |
-| `app/(customer)/adventures/page.tsx`             | `/adventures`                      | Browse adventures         |
-| `app/(customer)/adventures/[slug]/page.tsx`      | `/adventures/mountain-hike`        | Adventure details         |
-| `app/(customer)/adventures/[slug]/book/page.tsx` | `/adventures/mountain-hike/book`   | Booking request           |
-| `app/(customer)/custom-event/page.tsx`           | `/custom-event`                    | Private event request      |
-| `app/(customer)/contact/page.tsx`                | `/contact`                         | General inquiry           |
-| `app/admin/page.tsx`                             | `/admin`                           | Admin dashboard           |
-| `app/api/inquiries/route.ts`                     | `/api/inquiries`                   | Inquiry API endpoint      |
-
-### What does `(customer)` mean?
-
-Parentheses create a **route group**. The folder helps organize related pages and lets them share `layout.tsx`, but the word `customer` does not appear in the URL.
-
-For example:
-
-```text
-app/(customer)/events/page.tsx
-```
-
-becomes:
-
-```text
-/events
-```
-
-### What does `[slug]` mean?
-
-Square brackets create a dynamic route. The same page can display different records based on the URL value:
-
-```text
-/events/summer-festival
-/events/autumn-market
-```
-
-Inside the page, the value is available as `params.slug`.
+`(customer)` is a route group: it shares a layout but does not appear in the URL. `[slug]` is a dynamic segment.
 
 ---
 
 ## Frontend and Backend Responsibilities
 
-This is one Next.js application, but it has both frontend and backend responsibilities.
+- **Server Components** fetch data before rendering. Files marked `"use client"` hold browser state and event handlers.
+- **Server Actions** (`features/*/actions.ts`, `features/*/server/actions.ts`) handle trusted form mutations.
+- **Route handlers** (`app/api/**/route.ts`) serve HTTP endpoints and webhooks.
+- Do not put database queries or secrets in visual components; pass data through props or call a named action.
 
-### Frontend
+## Supabase Clients
 
-Frontend code displays pages and handles browser interaction:
+| File                      | Use                                                                 |
+| ------------------------- | ------------------------------------------------------------------- |
+| `lib/supabase/browser.ts` | Client Components only; public key, protected by Row Level Security |
+| `lib/supabase/server.ts`  | Server Components, Server Actions, route handlers; reads user cookies |
+| `lib/supabase/admin.ts`   | Service-role client for trusted server-only work (e.g. cover uploads) |
+| `lib/supabase/prisma.ts`  | Prisma client for database access                                   |
 
-- `app/(customer)/.../page.tsx` displays customer pages.
-- `components/` contains reusable React components.
-- Files with `"use client"` can use React state, event handlers, and browser APIs.
-- `components/forms/InquiryForm.tsx` is currently a client component because it manages form state in the browser.
+Never import the admin client into a `"use client"` file.
 
-### Backend
+## Data Model
 
-Backend code runs on the server and can safely use secrets:
-
-- Server Components fetch data before rendering a page.
-- Server Actions will handle trusted form mutations.
-- `app/api/**/route.ts` contains HTTP endpoints and webhook endpoints.
-- `lib/supabase/server.ts` creates a Supabase client for server-side code.
-- Supabase will provide the database, authentication, and storage.
-
-Do not put database queries or secret keys inside a visual component. A component should receive data through props or call a clearly named action.
-
----
-
-## Supabase Client Rules
-
-There are different Supabase clients because browser code and server code have different security requirements.
-
-### `lib/supabase/browser.ts`
-
-Use this client only in a Client Component when browser interaction needs Supabase directly.
-
-```ts
-import { createClient } from "@/lib/supabase/browser";
-```
-
-The browser client may use public Supabase credentials, but it must still be protected by Row Level Security policies.
-
-### `lib/supabase/server.ts`
-
-Use this client in Server Components, Server Actions, and server route handlers:
-
-```ts
-import { createClient } from "@/lib/supabase/server";
-```
-
-This client can read the authenticated user's cookies and should be the default for database operations.
-
-### Service-role access
-
-The service-role key is more powerful than the public key. It bypasses normal Row Level Security protections. It should only be used in trusted server-only code for tasks such as administrative jobs or controlled webhooks.
-
-Never import a service-role client into a file marked `"use client"`. Never send the service-role key to the browser.
-
----
-
-## Feature Modules
-
-The `features/` directory groups code by business capability instead of putting every file into one large technical folder.
-
-For example, the events feature owns event-specific code:
-
-```text
-features/events/
-├── types.ts       # Event TypeScript type
-├── queries.ts     # Functions that read event data
-├── actions.ts     # Functions that create or update events later
-├── schemas.ts     # Form validation rules later
-└── components/    # Event-specific components later
-```
-
-This makes it easier to answer questions such as:
-
-- Where does event data come from? `features/events/queries.ts`
-- What does an event look like? `features/events/types.ts`
-- Where will event creation be implemented? `features/events/actions.ts`
-- Where are event-specific cards or tables? `features/events/components/`
-
-The same pattern should be used for:
-
-- `features/adventures/`
-- `features/bookings/`
-- `features/inquiries/`
-- `features/gallery/`
-- `features/auth/`
-
-Keep generic buttons, inputs, and layout components in `components/`. Keep business-specific behavior in its feature module.
+Defined in `prisma/schema.prisma`: `Profile`, `Role`, `Location`, `EventAdventure` (events and adventures), and `Booking`. After changing the schema, create a migration with `npx prisma migrate dev` and regenerate the client with `npx prisma generate`.
 
 ---
 
 ## Current Implementation Status
 
-### Currently available
+### Available
 
-- Public customer route structure
-- Customer header and footer
-- Event and adventure browsing pages
-- Event and adventure detail route placeholders
-- Stripe-hosted event ticket checkout with booking reservations
-- Adventure booking request pages
-- Private event inquiry page
-- Contact page
-- Admin dashboard and CMS navigation
-- Supabase browser/server client foundation
-- Typed event, adventure, and inquiry database placeholders
-- Inquiry API route and Stripe payment webhook
+- Public event and adventure browsing with filtering and search
+- Event detail pages and Stripe-hosted ticket checkout with inventory reservation and webhook confirmation
+- Adventure booking requests, custom event requests, and contact inquiries
+- Supabase Auth: sign-up, login, forgot/reset password
+- Customer dashboard and admin dashboard (events, bookings, schedule, users, permissions)
+- Event cover image upload to Supabase Storage
+- Prisma schema with migrations and SQL seed data
 
-### Still needs to be connected
+### Still to do
 
-- Supabase database migrations
-- Generated database types from the real Supabase schema
-- Real event and adventure queries
-- Server-side form validation
-- Server Actions for inquiry and booking submissions
-- Supabase Auth login and logout
-- Admin authorization and protected routes
-- Row Level Security policies
-- Supabase Storage gallery uploads
-- Production Stripe credentials and webhook endpoint configuration
+- Production Stripe credentials and webhook configuration
+- Running `prisma migrate deploy` and creating the storage bucket in the cloud project
+- Row Level Security policy review
 - Automated tests
 
-Some pages currently show empty states because the query functions intentionally return empty arrays until the database schema is created.
-
 ---
 
-## Recommended Development Workflow
+## Development Workflow
 
-When adding a new capability, follow this order:
+When adding a capability:
 
-1. Define the database table and Row Level Security policy in Supabase.
-2. Update or regenerate `types/database.ts`.
-3. Add domain types, queries, validation, and actions under `features/<feature-name>/`.
-4. Add reusable visual components under the feature's `components/` folder.
-5. Add the route page under `app/`.
-6. Add loading, error, and empty states.
-7. Test anonymous, authenticated, and administrator behavior.
-8. Run lint, TypeScript, and the production build.
+1. Update `prisma/schema.prisma` and create a migration.
+2. Add types, queries, validation (Zod), and actions under `features/<feature-name>/`.
+3. Add reusable components under the feature's `components/` folder.
+4. Add the route under `app/`, with loading, error, and empty states.
+5. Test anonymous, customer, and admin behavior.
+6. Run lint, TypeScript, and the production build.
 
-Example for a new event field:
+## Conventions
 
-```text
-Supabase migration
-        ↓
-types/database.ts
-        ↓
-features/events/types.ts
-        ↓
-features/events/queries.ts
-        ↓
-app/(customer)/events/[slug]/page.tsx
-```
+- **PascalCase** or **kebab-case** matching the surrounding folder for component files; **camelCase** for functions and variables; **kebab-case** for URL folders and utility files.
+- Explicit types on functions, JSDoc with `@param` / `@returns`, early returns, and braces on all `if` blocks.
+- Prefer types derived from Prisma over hand-written duplicates.
+- Reuse the shared validation helpers in `lib/validation/`.
+- Use the `@/*` import alias instead of long relative paths.
 
-This keeps the database, backend logic, and user interface consistent.
-
----
-
-## Naming Conventions
-
-- Use **PascalCase** for React component files: `EventCard.tsx`.
-- Use **camelCase** for functions and variables: `getPublishedEvents`.
-- Use **kebab-case** for URL folders: `custom-event`.
-- Use **kebab-case** for utility files: `event-service.ts`.
-- Use **TypeScript types** for data contracts between backend and frontend.
-- Prefer descriptive names over abbreviations.
-- Keep components small and focused on one responsibility.
-
----
-
-## Important Security Rules
+## Security Rules
 
 - Do not commit `.env.local`.
-- Do not expose `SUPABASE_SERVICE_ROLE_KEY` to the browser.
+- Do not expose `SUPABASE_SERVICE_ROLE_KEY` or `STRIPE_SECRET_KEY` to the browser.
 - Validate every form on the server, even if the browser also validates it.
 - Check authentication and authorization inside every Server Action and API route.
-- Use Row Level Security for database protection; frontend checks alone are not security.
-- Verify signatures for payment provider webhooks before changing booking or payment data.
-
----
+- Verify Stripe webhook signatures before changing booking or payment data.
 
 ## Useful Commands
 
 ```bash
-npm run dev       # Start the local development server
-npm run lint      # Run ESLint
-npx tsc --noEmit  # Check TypeScript without creating files
-npm run build     # Create a production build
-npm run start     # Run the production build locally
-```
-
-The project uses the `@/*` import alias, so this:
-
-```ts
-import { PageIntro } from "@/components/ui/PageIntro";
-```
-
-is preferred over a long relative import such as:
-
-```ts
-import { PageIntro } from "../../../components/ui/PageIntro";
+npm run dev            # Start the development server
+npm run lint           # Run ESLint
+npx tsc --noEmit       # Type-check
+npm run build          # prisma generate + production build
+npm run start          # Run the production build locally
+npx prisma migrate dev # Create/apply migrations locally
+npx prisma generate    # Regenerate the Prisma client
 ```
