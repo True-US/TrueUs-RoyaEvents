@@ -254,6 +254,8 @@ export async function getAdminEvents(): Promise<eventAdventureRecord[]> {
         : null,
     requestStatus: event.requestStatus,
     coverUrl: getCoverUrl(event.coverImagePath),
+    updatedAt: event.updatedAt.toISOString(),
+    updatedBy: event.updatedBy,
 
     location: event.location
       ? {

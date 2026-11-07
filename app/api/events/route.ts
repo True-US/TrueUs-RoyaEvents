@@ -236,10 +236,27 @@ export async function PATCH(request: Request) {
       );
     }
 
+    // Requests also carry contact details; check them the same way as when a request is created.
+    let contact: { contactName: string; contactEmail: string; contactPhone: string } | undefined;
+    if (checked.event.eventType === "custom_event" || checked.event.eventType === "CUSTOM_EVENT") {
+      const contactChecked: ReturnType<typeof checkRequestContact> = checkRequestContact(checked.event);
+      if (contactChecked.error !== undefined) {
+        return NextResponse.json(
+          { success: false, message: contactChecked.error },
+          { status: 400 },
+        );
+      }
+      contact = contactChecked.contact;
+    }
+
     const result = await updateEventWithLocation({
       id: payload.id,
       location: { ...checked.location, id: payload.location.id },
-      event: checked.event,
+      event: {
+        ...checked.event,
+        ...contact,
+        updatedBy: `${profile.firstName} ${profile.lastName}`,
+      },
     });
 
     return NextResponse.json(result);
